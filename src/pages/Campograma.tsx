@@ -1204,7 +1204,7 @@ export default function Campograma() {
               className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs px-4 h-9 rounded-lg uppercase flex items-center justify-center gap-1.5 cursor-pointer transition-colors shadow-lg shadow-blue-900/20"
             >
               <Upload className="w-3.5 h-3.5 mr-0.5 text-white" />
-              {isSavingSupabase ? 'Guardando...' : 'Guardar en Supabase'}
+              {isSavingSupabase ? 'Guardando...' : 'Guardar'}
             </Button>
           </div>
         </div>
