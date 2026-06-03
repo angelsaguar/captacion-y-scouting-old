@@ -36,6 +36,7 @@ export async function getCoaches(): Promise<Coach[]> {
 
     if (!error && data) {
       // Preserve local entries that might have failed to insert into Supabase
+      // Also preserve specific local fields (like telefono, email, equipo_asignado) if they are missing in the Supabase schema
       const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
       let localCoaches: Coach[] = [];
       if (cached) {
@@ -44,12 +45,30 @@ export async function getCoaches(): Promise<Coach[]> {
         } catch {}
       }
       
+      const localMap = new Map<string, Coach>();
+      localCoaches.forEach(c => localMap.set(c.id, c));
+
+      const merged = data.map(remoteCoach => {
+        const localCoach = localMap.get(remoteCoach.id);
+        if (localCoach) {
+          return {
+            ...localCoach,
+            ...remoteCoach,
+            // If remote doesn't contain these key fields (due to missing columns), keep the local ones
+            telefono: remoteCoach.telefono !== undefined ? remoteCoach.telefono : localCoach.telefono,
+            email: remoteCoach.email !== undefined ? remoteCoach.email : localCoach.email,
+            equipo_asignado: remoteCoach.equipo_asignado !== undefined ? remoteCoach.equipo_asignado : localCoach.equipo_asignado
+          };
+        }
+        return remoteCoach;
+      });
+
       const remoteIds = new Set(data.map(c => c.id));
       const unsynced = localCoaches.filter(c => !remoteIds.has(c.id));
       
-      const merged = [...data, ...unsynced];
-      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(merged));
-      return merged;
+      const finalMerged = [...merged, ...unsynced];
+      localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(finalMerged));
+      return finalMerged;
     } else {
       console.warn('Supabase returned error or empty for coaches:', error);
     }
@@ -149,6 +168,15 @@ export async function addCoach(
           .single();
           
         if (!retryError && retryData) {
+          // Save the fully populated coach to local storage first, so when getCoaches() fetches and merges, it preserves these fields
+          const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+          let list: Coach[] = [];
+          if (cached) {
+            try { list = JSON.parse(cached); } catch {}
+          }
+          const updatedList = [newCoach, ...list.filter(c => c.id !== newCoach.id)];
+          localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
+
           await getCoaches();
           return {
             ...newCoach,
@@ -166,6 +194,15 @@ export async function addCoach(
             .single();
             
           if (!retryError3 && retryData3) {
+            // Save the fully populated coach to local storage first, so when getCoaches() fetches and merges, it preserves these fields
+            const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+            let list: Coach[] = [];
+            if (cached) {
+              try { list = JSON.parse(cached); } catch {}
+            }
+            const updatedList = [newCoach, ...list.filter(c => c.id !== newCoach.id)];
+            localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(updatedList));
+
             await getCoaches();
             return {
               ...newCoach,
@@ -256,8 +293,30 @@ export async function updateCoach(
         .single();
         
       if (!retryError && retryData) {
+        // Save the fully populated update (including fields dropped for Supabase) to local storage
+        // so that the getCoaches fetch merges them and persists them to browser cache.
+        const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
+        if (cached) {
+          try {
+            const list: Coach[] = JSON.parse(cached);
+            const index = list.findIndex(c => c.id === id);
+            if (index !== -1) {
+              list[index] = {
+                ...list[index],
+                ...updatePayload,
+                id // ensure id is kept
+              };
+              localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(list));
+            }
+          } catch {}
+        }
+
         await getCoaches();
-        return retryData;
+        return {
+          id,
+          ...updatePayload,
+          ...retryData
+        };
       }
     }
 
