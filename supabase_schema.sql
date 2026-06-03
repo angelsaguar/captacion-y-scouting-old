@@ -70,6 +70,7 @@ CREATE TABLE IF NOT EXISTS public.coaches (
     categoria TEXT NOT NULL,
     edad INTEGER,
     email TEXT,
+    telefono TEXT,
     observaciones TEXT,
     equipo_asignado TEXT,
     created_by UUID REFERENCES public.users(id) ON DELETE SET NULL,

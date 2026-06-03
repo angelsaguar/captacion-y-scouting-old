@@ -80,7 +80,8 @@ export async function addCoach(
   observaciones?: string,
   created_by?: string,
   equipo_asignado?: string,
-  email?: string
+  email?: string,
+  telefono?: string
 ): Promise<Coach> {
   const trimmedNombre = nombre.trim();
   const trimmedClub = club.trim();
@@ -102,6 +103,7 @@ export async function addCoach(
     categoria: trimmedCategoria,
     edad: edad || undefined,
     email: email?.trim() || undefined,
+    telefono: telefono?.trim() || undefined,
     observaciones: observaciones?.trim() || '',
     equipo_asignado: equipo_asignado || undefined,
     created_by,
@@ -137,6 +139,7 @@ export async function addCoach(
         if (isMissingColumn) {
           delete retryCoach.equipo_asignado;
           delete retryCoach.email;
+          delete retryCoach.telefono;
         }
         
         const { data: retryData, error: retryError } = await supabase
@@ -203,7 +206,8 @@ export async function updateCoach(
   edad?: number,
   observaciones?: string,
   equipo_asignado?: string,
-  email?: string
+  email?: string,
+  telefono?: string
 ): Promise<Coach> {
   const trimmedNombre = nombre.trim();
   const trimmedClub = club.trim();
@@ -222,6 +226,7 @@ export async function updateCoach(
     categoria: trimmedCategoria,
     edad: edad || null,
     email: email?.trim() || null,
+    telefono: telefono?.trim() || null,
     observaciones: observaciones?.trim() || '',
     equipo_asignado: equipo_asignado || null
   };
@@ -239,10 +244,10 @@ export async function updateCoach(
       return data;
     }
     
-    // Fallback if equipo_asignado or email column is missing
+    // Fallback if equipo_asignado, email or telefono column is missing
     if (error && (error.code === '42703' || error.message?.includes('column') || error.message?.includes('schema cache'))) {
       console.warn('Supabase coach update failed due to missing columns, retrying with fallback...');
-      const { equipo_asignado, email: fallbackEmail, ...retryPayload } = updatePayload;
+      const { equipo_asignado, email: fallbackEmail, telefono: fallbackTelefono, ...retryPayload } = updatePayload;
       const { data: retryData, error: retryError } = await supabase
         .from('coaches')
         .update(retryPayload)

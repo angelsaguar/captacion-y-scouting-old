@@ -69,6 +69,7 @@ export interface Coach {
   categoria: string;
   edad?: number;
   email?: string; // New field for coach email
+  telefono?: string; // New field for coach phone number
   observaciones?: string;
   equipo_asignado?: string; // New field for assigned team in La Poveda club
   created_by?: string;

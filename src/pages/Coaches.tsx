@@ -21,7 +21,9 @@ import {
   Layers,
   Sparkles,
   ClipboardList,
-  Mail
+  Mail,
+  Phone,
+  MessageSquare
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -39,6 +41,7 @@ export default function Coaches() {
   const [categoria, setCategoria] = useState('');
   const [edad, setEdad] = useState<string>('');
   const [email, setEmail] = useState('');
+  const [telefono, setTelefono] = useState('');
   const [observaciones, setObservaciones] = useState('');
   const [equipoAsignado, setEquipoAsignado] = useState('');
   const [saving, setSaving] = useState(false);
@@ -51,6 +54,7 @@ export default function Coaches() {
   const [editingCategoria, setEditingCategoria] = useState('');
   const [editingEdad, setEditingEdad] = useState<string>('');
   const [editingEmail, setEditingEmail] = useState('');
+  const [editingTelefono, setEditingTelefono] = useState('');
   const [editingObservaciones, setEditingObservaciones] = useState('');
   const [editingEquipoAsignado, setEditingEquipoAsignado] = useState('');
   const [updating, setUpdating] = useState(false);
@@ -75,6 +79,17 @@ export default function Coaches() {
     }
     loadCoaches();
   }, []);
+
+  const getWhatsAppLink = (phone?: string, coachName?: string) => {
+    if (!phone) return '#';
+    let clean = phone.replace(/[^0-9]/g, '');
+    if (clean.length === 9) {
+      // Default Spanish country code if 9 digits and no country code prefix
+      clean = '34' + clean;
+    }
+    const message = encodeURIComponent(`Hola ${coachName || 'míster'}, te contacto desde la dirección deportiva de la U.D. La Poveda.`);
+    return `https://wa.me/${clean}?text=${message}`;
+  };
 
   const handleAddCoach = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -111,7 +126,8 @@ export default function Coaches() {
         observaciones,
         user?.id,
         equipoAsignado,
-        email
+        email,
+        telefono
       );
       setCoaches(prev => [created, ...prev]);
       setNombre('');
@@ -120,6 +136,7 @@ export default function Coaches() {
       setCategoria('');
       setEdad('');
       setEmail('');
+      setTelefono('');
       setObservaciones('');
       setEquipoAsignado('');
       toast.success('Entrenador registrado para seguimiento');
@@ -138,6 +155,7 @@ export default function Coaches() {
     setEditingCategoria(coach.categoria);
     setEditingEdad(coach.edad ? coach.edad.toString() : '');
     setEditingEmail(coach.email || '');
+    setEditingTelefono(coach.telefono || '');
     setEditingObservaciones(coach.observaciones || '');
     setEditingEquipoAsignado(coach.equipo_asignado || '');
   };
@@ -180,7 +198,8 @@ export default function Coaches() {
         parsedEdad,
         editingObservaciones,
         editingEquipoAsignado,
-        editingEmail
+        editingEmail,
+        editingTelefono
       );
       setCoaches(prev => prev.map(c => c.id === id ? updated : c));
       setEditingId(null);
@@ -342,6 +361,18 @@ export default function Coaches() {
                     placeholder="Ej. entrenador@correo.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
+                    className="bg-slate-900 border-slate-805 text-white placeholder-slate-550 text-sm focus-visible:ring-indigo-600"
+                  />
+                </div>
+
+                {/* Teléfono */}
+                <div className="space-y-1.5">
+                  <label className="text-xs font-bold uppercase text-slate-400">Teléfono</label>
+                  <Input
+                    type="tel"
+                    placeholder="Ej. +34600000000"
+                    value={telefono}
+                    onChange={(e) => setTelefono(e.target.value)}
                     className="bg-slate-900 border-slate-805 text-white placeholder-slate-550 text-sm focus-visible:ring-indigo-600"
                   />
                 </div>
@@ -529,6 +560,17 @@ export default function Coaches() {
                                 />
                               </div>
 
+                              {/* Teléfono */}
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-bold uppercase text-slate-400">Teléfono</span>
+                                <Input
+                                  type="tel"
+                                  value={editingTelefono}
+                                  onChange={(e) => setEditingTelefono(e.target.value)}
+                                  className="h-8 py-1 bg-slate-900 border-slate-700 text-white text-xs"
+                                />
+                              </div>
+
                               {/* Equipo Asignado */}
                               <div className="space-y-1">
                                 <span className="text-[10px] font-bold uppercase text-slate-400">Equipo Asignado del Club</span>
@@ -607,6 +649,12 @@ export default function Coaches() {
                                       <a href={`mailto:${coach.email}`} className="hover:underline">{coach.email}</a>
                                     </div>
                                   )}
+                                  {coach.telefono && (
+                                    <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-emerald-300 font-semibold bg-emerald-950/40 border border-emerald-500/20 px-2.5 py-0.5 rounded-md w-fit mt-1 animate-in fade-in slide-in-from-top-1 duration-200">
+                                      <Phone className="w-3 h-3 text-emerald-400 shrink-0" />
+                                      <span>{coach.telefono}</span>
+                                    </div>
+                                  )}
                                 </div>
                               </div>
 
@@ -663,6 +711,28 @@ export default function Coaches() {
                             <p className="text-slate-300 text-sm leading-relaxed whitespace-pre-line font-medium">
                               {coach.observaciones || 'Sin especificaciones o anotaciones registradas.'}
                             </p>
+
+                            {/* Contact actions */}
+                            {coach.telefono && (
+                              <div className="grid grid-cols-2 gap-3 mt-3 pt-1 border-t border-slate-900/30">
+                                <a 
+                                  href={`tel:${coach.telefono}`} 
+                                  className="flex items-center justify-center gap-2 py-2.5 bg-slate-900/80 border border-slate-800 hover:bg-slate-850/80 text-blue-400 hover:text-blue-350 font-extrabold rounded-xl transition-all duration-200 text-center uppercase text-[10px] tracking-widest shadow-md hover:shadow-lg cursor-pointer"
+                                >
+                                  <Phone className="w-3.5 h-3.5" />
+                                  Llamar
+                                </a>
+                                <a 
+                                  href={getWhatsAppLink(coach.telefono, coach.nombre)} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer" 
+                                  className="flex items-center justify-center gap-2 py-2.5 bg-emerald-900/15 border border-emerald-500/15 hover:bg-emerald-900/25 text-emerald-400 hover:text-emerald-350 font-extrabold rounded-xl transition-all duration-200 text-center uppercase text-[10px] tracking-widest shadow-md hover:shadow-lg cursor-pointer"
+                                >
+                                  <MessageSquare className="w-3.5 h-3.5 text-emerald-405" />
+                                  WhatsApp
+                                </a>
+                              </div>
+                            )}
 
                             {/* Footer */}
                             <div className="flex flex-row items-center justify-between gap-1 text-[10px] text-slate-500 font-bold uppercase pt-1 border-t border-slate-950 mt-1">
