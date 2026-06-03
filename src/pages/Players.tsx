@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Player, PlayerStatus } from '@/types';
+import { Player, PlayerStatus, CLUB_TEAMS } from '@/types';
 import { 
   Card, 
   CardContent, 
@@ -62,6 +62,7 @@ export default function Players() {
   const [filterPosition, setFilterPosition] = useState<string>('');
   const [filterLateralidad, setFilterLateralidad] = useState<string>('');
   const [filterBirthYear, setFilterBirthYear] = useState<string>('');
+  const [filterEquipoAsignado, setFilterEquipoAsignado] = useState<string>('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -86,6 +87,13 @@ export default function Players() {
       if (filterBirthYear) {
         query = query.eq('anio_nacimiento', parseInt(filterBirthYear));
       }
+      if (filterEquipoAsignado) {
+        if (filterEquipoAsignado === 'SIN_ASIGNAR') {
+          query = query.or('equipo_asignado.is.null,equipo_asignado.eq.""');
+        } else {
+          query = query.eq('equipo_asignado', filterEquipoAsignado);
+        }
+      }
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
@@ -99,7 +107,7 @@ export default function Players() {
 
   useEffect(() => {
     fetchPlayers();
-  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear]);
+  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado]);
 
   const requestDelete = (id: string) => {
     if (!isAdmin) {
@@ -160,6 +168,7 @@ export default function Players() {
               setFilterPosition(''); 
               setFilterLateralidad('');
               setFilterBirthYear('');
+              setFilterEquipoAsignado('');
               toast.info('Se han restablecido todos los filtros para mostrar el total');
             }}
             className="bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border-blue-500/40 rounded-full font-extrabold text-sm md:text-base h-12 md:h-14 px-5 md:px-7 flex items-center gap-3 self-start sm:self-center shadow-lg shadow-blue-955/20 transition-all duration-300 transform hover:scale-[1.02]"
@@ -198,7 +207,7 @@ export default function Players() {
 
       <Card className="premium-card">
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
               <Input 
@@ -259,6 +268,18 @@ export default function Players() {
                 ))}
               </SelectContent>
             </Select>
+            <Select value={filterEquipoAsignado} onValueChange={setFilterEquipoAsignado}>
+              <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl">
+                <SelectValue placeholder="EQUIPO ASIGNADO" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">TODOS LOS EQUIPOS</SelectItem>
+                <SelectItem value="SIN_ASIGNAR">Sin Asignar</SelectItem>
+                {CLUB_TEAMS.map((team) => (
+                  <SelectItem key={team} value={team}>{team}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Button 
               variant="outline" 
               className="border-slate-700 hover:bg-slate-800 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-xl"
@@ -268,6 +289,7 @@ export default function Players() {
                 setFilterPosition(''); 
                 setFilterLateralidad('');
                 setFilterBirthYear('');
+                setFilterEquipoAsignado('');
               }}
             >
               Limpiar
