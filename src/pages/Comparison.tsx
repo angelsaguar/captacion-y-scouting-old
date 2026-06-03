@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Player, POSITION_ATTRIBUTES } from '@/types';
+import { Player, POSITION_ATTRIBUTES, CLUB_TEAMS } from '@/types';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { 
   Select, 
@@ -23,7 +23,8 @@ import {
   Cell
 } from 'recharts';
 import { Badge } from '@/components/ui/badge';
-import { Star, Swords, TrendingUp, Users } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Star, Swords, TrendingUp, Users, Filter, RotateCcw } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function Comparison() {
@@ -31,6 +32,11 @@ export default function Comparison() {
   const [playerA, setPlayerA] = useState<Player | null>(null);
   const [playerB, setPlayerB] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Filters state
+  const [filterBirthYear, setFilterBirthYear] = useState<string>('');
+  const [filterPosition, setFilterPosition] = useState<string>('');
+  const [filterEquipoAsignado, setFilterEquipoAsignado] = useState<string>('');
 
   useEffect(() => {
     async function fetchPlayers() {
@@ -40,6 +46,33 @@ export default function Comparison() {
     }
     fetchPlayers();
   }, []);
+
+  // Filter computations
+  const birthYears = Array.from(
+    new Set<number>(players.map(p => p.anio_nacimiento).filter((y: any): y is number => typeof y === 'number'))
+  ).sort((a: number, b: number) => b - a);
+
+  const filteredPlayers = players.filter(p => {
+    if (filterBirthYear && p.anio_nacimiento?.toString() !== filterBirthYear) return false;
+    if (filterPosition && p.posicion !== filterPosition) return false;
+    if (filterEquipoAsignado) {
+      if (filterEquipoAsignado === 'SIN_ASIGNAR') {
+        if (p.equipo_asignado && p.equipo_asignado !== '') return false;
+      } else if (p.equipo_asignado !== filterEquipoAsignado) {
+        return false;
+      }
+    }
+    return true;
+  });
+
+  const getOptionsList = (selectedPlayer: Player | null) => {
+    // If we have search results, let's sort them alphabetically for convenience
+    const sortedFiltered = [...filteredPlayers].sort((a, b) => `${a.nombre} ${a.apellidos}`.localeCompare(`${b.nombre} ${b.apellidos}`));
+    if (!selectedPlayer) return sortedFiltered;
+    const isAlreadyInList = sortedFiltered.some(p => p.id === selectedPlayer.id);
+    if (isAlreadyInList) return sortedFiltered;
+    return [selectedPlayer, ...sortedFiltered];
+  };
 
   const getPlayerDataForChart = () => {
     if (!playerA && !playerB) return [];
@@ -72,6 +105,96 @@ export default function Comparison() {
         </h1>
         <p className="text-slate-500 font-bold tracking-widest uppercase text-[10px] sm:text-xs">Análisis de rendimiento lado a lado</p>
       </div>
+
+      {/* Filtros de Búsqueda de Jugadores */}
+      <Card className="premium-card bg-slate-900/40 border-slate-800">
+        <CardContent className="p-4 sm:p-6">
+          <div className="flex flex-col gap-4">
+            <div className="flex items-center gap-2 pb-2 border-b border-slate-800/60">
+              <Filter className="w-4 h-4 text-indigo-400" />
+              <h3 className="text-xs font-black uppercase text-slate-300 tracking-wider">Filtros para los selectores de prospectos</h3>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 items-end">
+              {/* Selector de Año de Nacimiento */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Año de Nacimiento</label>
+                <Select value={filterBirthYear} onValueChange={setFilterBirthYear}>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-200 rounded-xl h-10">
+                    <SelectValue placeholder="TODOS LOS AÑOS" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                    <SelectItem value="">Todos los años</SelectItem>
+                    {birthYears.map(year => (
+                      <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Selector de Demarcación/Posición */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Demarcación</label>
+                <Select value={filterPosition} onValueChange={setFilterPosition}>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-200 rounded-xl h-10">
+                    <SelectValue placeholder="TODAS LAS DEMARCACIONES" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                    <SelectItem value="">Todas las demarcaciones</SelectItem>
+                    <SelectItem value="PORTERO">Portero</SelectItem>
+                    <SelectItem value="CENTRAL">Central</SelectItem>
+                    <SelectItem value="LATERAL">Lateral</SelectItem>
+                    <SelectItem value="MEDIO CENTRO DEFENSIVO">MCD</SelectItem>
+                    <SelectItem value="INTERIOR">Interior</SelectItem>
+                    <SelectItem value="MEDIA PUNTA">Media Punta</SelectItem>
+                    <SelectItem value="EXTREMO">Extremo</SelectItem>
+                    <SelectItem value="DELANTERO">Delantero</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Selector de Equipo Asignado */}
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black uppercase tracking-wider text-slate-400">Equipo Asignado Club</label>
+                <Select value={filterEquipoAsignado} onValueChange={setFilterEquipoAsignado}>
+                  <SelectTrigger className="bg-slate-950 border-slate-800 text-slate-200 rounded-xl h-10">
+                    <SelectValue placeholder="TODOS LOS EQUIPOS" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-slate-950 border-slate-800 text-slate-200">
+                    <SelectItem value="">Todos los equipos</SelectItem>
+                    <SelectItem value="SIN_ASIGNAR">Sin Asignar</SelectItem>
+                    {CLUB_TEAMS.map((team) => (
+                      <SelectItem key={team} value={team}>{team}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Botón de Limpiar */}
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  setFilterBirthYear('');
+                  setFilterPosition('');
+                  setFilterEquipoAsignado('');
+                }}
+                className="border-slate-800 hover:bg-slate-800 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-xl h-10 flex items-center justify-center gap-2"
+                disabled={!filterBirthYear && !filterPosition && !filterEquipoAsignado}
+              >
+                <RotateCcw className="w-3 h-3" />
+                Limpiar Filtros
+              </Button>
+            </div>
+            
+            {/* Pequeña nota informativa del estado de filtrado */}
+            <div className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-2">
+              <span>Jugadores disponibles que coinciden:</span>
+              <span className="text-indigo-400 font-black">{filteredPlayers.length} de {players.length}</span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-8 bg-slate-950/90 pb-4 md:pb-6 pt-2 z-20">
         <Card className="premium-card bg-blue-600/5 border-blue-600/20">
           <CardHeader className="pb-2">
@@ -88,7 +211,7 @@ export default function Comparison() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                {players.map(p => (
+                {getOptionsList(playerA).map(p => (
                   <SelectItem key={p.id} value={p.id}>
                     {`${p.nombre} ${p.apellidos || ""} (${p.posicion})`}
                   </SelectItem>
@@ -113,7 +236,7 @@ export default function Comparison() {
                 </SelectValue>
               </SelectTrigger>
               <SelectContent className="bg-slate-900 border-slate-800 text-slate-200">
-                {players.map(p => (
+                {getOptionsList(playerB).map(p => (
                   <SelectItem key={p.id} value={p.id}>
                     {`${p.nombre} ${p.apellidos || ""} (${p.posicion})`}
                   </SelectItem>
