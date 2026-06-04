@@ -19,6 +19,10 @@ export async function getObservers(): Promise<Observer[]> {
     } catch {
       localList = [];
     }
+  } else {
+    // Initialize cache on first use
+    localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(DEFAULT_OBSERVERS));
+    localList = [...DEFAULT_OBSERVERS];
   }
 
   try {
@@ -52,7 +56,7 @@ export async function getObservers(): Promise<Observer[]> {
     console.warn('Could not fetch observers from Supabase, falling back to localStorage:', error);
   }
 
-  return localList.length ? localList : DEFAULT_OBSERVERS;
+  return localList;
 }
 
 export async function addObserver(nombre: string, foto_url?: string): Promise<Observer> {
@@ -129,32 +133,39 @@ export async function addObserver(nombre: string, foto_url?: string): Promise<Ob
 }
 
 export async function deleteObserver(id: string): Promise<boolean> {
-  try {
-    const { error } = await supabase
-      .from('observers')
-      .delete()
-      .eq('id', id);
+  const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+  
+  if (isUUID) {
+    try {
+      const { error } = await supabase
+        .from('observers')
+        .delete()
+        .eq('id', id);
 
-    if (!error) {
-      await getObservers();
-      return true;
+      if (error) {
+        console.error('Failed deleting observer from Supabase:', error);
+      }
+    } catch (err) {
+      console.warn('Failed deleting observer exception:', err);
     }
-  } catch (err) {
-    console.warn('Failed deleting observer from Supabase:', err);
+  } else {
+    console.info('Skipping Supabase delete because ID is not a valid UUID:', id);
   }
 
+  // Local fallback - always complete delete operation locally
   const cached = localStorage.getItem(LOCAL_STORAGE_KEY);
   if (cached) {
     try {
       const list: Observer[] = JSON.parse(cached);
       const filtered = list.filter(o => o.id !== id);
       localStorage.setItem(LOCAL_STORAGE_KEY, JSON.stringify(filtered));
+      await getObservers(); // Fetch/sync remaining from Supabase to keep state in sync
       return true;
     } catch {
       return false;
     }
   }
-  return false;
+  return true;
 }
 
 export async function updateObserver(id: string, nombre: string, foto_url?: string): Promise<Observer> {
