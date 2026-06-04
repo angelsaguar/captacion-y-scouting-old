@@ -14,7 +14,6 @@ import Comparison from '@/pages/Comparison';
 import Analytics from '@/pages/Analytics';
 import Admin from '@/pages/Admin';
 import Profile from '@/pages/Profile';
-import Register from '@/pages/Register';
 import Observers from '@/pages/Observers';
 import Needs from '@/pages/Needs';
 import Coaches from '@/pages/Coaches';
@@ -67,7 +66,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-          <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
+          <Route path="/register" element={<Navigate to="/login" />} />
           
           <Route element={user ? <Layout /> : <Navigate to="/login" />}>
             <Route path="/" element={<Dashboard />} />

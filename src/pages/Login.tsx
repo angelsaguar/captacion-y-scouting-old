@@ -30,15 +30,28 @@ export default function Login() {
       toast.error('Supabase no está configurado. Revisa los Ajustes.');
       return;
     }
+
+    const cleanEmail = email.trim().toLowerCase();
+    if (cleanEmail !== 'angel.saguar@telefonica.net') {
+      toast.error('Acceso restringido: Solo el administrador Ángel Saguar tiene permitido el acceso a la plataforma.');
+      return;
+    }
+
     setLoading(true);
 
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: cleanEmail,
         password,
       });
 
       if (error) throw error;
+
+      if (data?.user?.email !== 'angel.saguar@telefonica.net') {
+        await supabase.auth.signOut();
+        throw new Error('Acceso restringido: Cuenta no autorizada.');
+      }
+
       toast.success('Sesión iniciada correctamente');
       navigate('/');
     } catch (error: any) {
@@ -69,8 +82,8 @@ export default function Login() {
             </div>
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-white uppercase">U.D. LA POVEDA SCOUTING</CardTitle>
-          <CardDescription className="text-slate-400">
-            Solo personal autorizado. Se requiere invitación para el acceso.
+          <CardDescription className="text-slate-400 font-medium">
+            Acceso restringido exclusivo para el administrador Ángel Saguar. El registro público está cerrado.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
@@ -82,7 +95,7 @@ export default function Login() {
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="admin@lapoveda.com" 
+                  placeholder="angel.saguar@telefonica.net" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-slate-800 border-slate-700 text-white pl-10 focus:ring-blue-600"
@@ -122,11 +135,8 @@ export default function Login() {
                 'ENTRAR A LA PLATAFORMA'
               )}
             </Button>
-            <p className="text-xs text-center text-slate-500">
-              ¿No tienes cuenta?{' '}
-              <Link to="/register" className="text-blue-500 hover:underline font-bold">
-                Regístrate aquí
-              </Link>
+            <p className="text-xs text-center text-slate-600 font-medium">
+              El auto-registro ha sido deshabilitado por motivos de seguridad.
             </p>
           </CardFooter>
         </form>

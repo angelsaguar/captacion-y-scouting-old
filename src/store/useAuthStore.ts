@@ -14,6 +14,11 @@ export const useAuthStore = create<AuthState>((set) => ({
   user: null,
   loading: true,
   setUser: (user) => {
+    if (user && user.email !== 'angel.saguar@telefonica.net') {
+      supabase.auth.signOut();
+      set({ user: null, loading: false });
+      return;
+    }
     if (user && user.email === 'angel.saguar@telefonica.net') {
       user.role = 'admin';
     }
@@ -27,17 +32,22 @@ export const useAuthStore = create<AuthState>((set) => ({
     try {
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
+        const isAdminEmail = authUser.email === 'angel.saguar@telefonica.net';
+        if (!isAdminEmail) {
+          await supabase.auth.signOut();
+          set({ user: null, loading: false });
+          return;
+        }
         const { data: profile } = await supabase
           .from('users')
           .select('*')
           .eq('id', authUser.id)
           .single();
         
-        const isAdminEmail = authUser.email === 'angel.saguar@telefonica.net';
         if (profile) {
           const updatedProfile = {
             ...profile,
-            role: isAdminEmail ? 'admin' : (profile.role || 'scout'),
+            role: 'admin',
           };
           set({ user: updatedProfile as User, loading: false });
         } else {
@@ -48,7 +58,7 @@ export const useAuthStore = create<AuthState>((set) => ({
               id: authUser.id, 
               email: authUser.email || '', 
               nombre: authUser.user_metadata?.nombre || 'Nuevo Usuario',
-              role: isAdminEmail ? 'admin' : 'scout' 
+              role: 'admin' 
             } as User, 
             loading: false 
           });
