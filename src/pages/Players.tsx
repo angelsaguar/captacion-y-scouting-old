@@ -63,6 +63,7 @@ export default function Players() {
   const [filterLateralidad, setFilterLateralidad] = useState<string>('');
   const [filterBirthYear, setFilterBirthYear] = useState<string>('');
   const [filterEquipoAsignado, setFilterEquipoAsignado] = useState<string>('');
+  const [filterEquipoActual, setFilterEquipoActual] = useState<string>('');
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -94,6 +95,9 @@ export default function Players() {
           query = query.eq('equipo_asignado', filterEquipoAsignado);
         }
       }
+      if (filterEquipoActual) {
+        query = query.ilike('equipo_actual', `%${filterEquipoActual}%`);
+      }
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
@@ -107,7 +111,7 @@ export default function Players() {
 
   useEffect(() => {
     fetchPlayers();
-  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado]);
+  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado, filterEquipoActual]);
 
   const requestDelete = (id: string) => {
     if (!isAdmin) {
@@ -169,6 +173,7 @@ export default function Players() {
               setFilterLateralidad('');
               setFilterBirthYear('');
               setFilterEquipoAsignado('');
+              setFilterEquipoActual('');
               toast.info('Se han restablecido todos los filtros para mostrar el total');
             }}
             className="bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border-blue-500/40 rounded-full font-extrabold text-sm md:text-base h-12 md:h-14 px-5 md:px-7 flex items-center gap-3 self-start sm:self-center shadow-lg shadow-blue-955/20 transition-all duration-300 transform hover:scale-[1.02]"
@@ -207,7 +212,7 @@ export default function Players() {
 
       <Card className="premium-card">
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-7 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-4">
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
               <Input 
@@ -215,6 +220,15 @@ export default function Players() {
                 className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500 rounded-xl"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+            <div className="relative">
+              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+              <Input 
+                placeholder="Equipo de origen..." 
+                className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500 rounded-xl"
+                value={filterEquipoActual}
+                onChange={(e) => setFilterEquipoActual(e.target.value)}
               />
             </div>
             <Select value={filterStatus} onValueChange={setFilterStatus}>
@@ -290,6 +304,7 @@ export default function Players() {
                 setFilterLateralidad('');
                 setFilterBirthYear('');
                 setFilterEquipoAsignado('');
+                setFilterEquipoActual('');
               }}
             >
               Limpiar
