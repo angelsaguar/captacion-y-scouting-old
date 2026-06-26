@@ -11,8 +11,10 @@ import {
   Plus,
   Eye,
   UserCheck,
-  UserX
+  UserX,
+  CalendarOff
 } from 'lucide-react';
+import { toast } from 'sonner';
 import { 
   BarChart, 
   Bar, 
@@ -209,6 +211,24 @@ export default function Dashboard() {
   ];
 
   const totalCount = stats.total;
+
+  const handleRemoveFollowUp = async (playerId: string, playerName: string) => {
+    try {
+      const { error } = await supabase
+        .from('players')
+        .update({ fecha_seguimiento: null })
+        .eq('id', playerId);
+
+      if (error) throw error;
+
+      // Update local state to immediately filter it out
+      setAllPlayers(prev => prev.map(p => p.id === playerId ? { ...p, fecha_seguimiento: null } : p));
+      toast.success(`Seguimiento removido para ${playerName}`);
+    } catch (err: any) {
+      console.error('Error removing follow-up:', err);
+      toast.error('No se pudo remover el seguimiento del jugador');
+    }
+  };
 
   return (
     <div className="space-y-6 md:space-y-8">
@@ -419,28 +439,45 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   stats.upcomingPlayers.map((player) => (
-                    <Link
+                    <div
                       key={player.id}
-                      to={`/players/${player.id}`}
                       className={cn(
-                        "block p-4 border-l-4 bg-slate-800/30 hover:bg-slate-800/60 rounded-r-2xl border-solid transition-all group",
+                        "flex items-center justify-between p-4 border-l-4 bg-slate-800/30 hover:bg-slate-800/60 rounded-r-2xl border-solid transition-all group/item",
                         getBorderColor(player.estado)
                       )}
                     >
-                      <p className="text-sm font-bold text-white truncate group-hover:text-blue-400 transition-colors">
-                        Seguimiento: {player.nombre} {player.apellidos}
-                      </p>
-                      <p className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mt-0.5">
-                        {player.posicion} • {player.equipo_actual || 'Sin club'}
-                      </p>
-                      <p className={cn(
-                        "text-[10px] uppercase font-black tracking-widest mt-2 flex items-center gap-1",
-                        getTextColorForBadge(player.estado)
-                      )}>
-                        <Clock className="w-3 h-3 shrink-0" />
-                        {formatDate(player.fecha_seguimiento!)}
-                      </p>
-                    </Link>
+                      <Link
+                        to={`/players/${player.id}`}
+                        className="flex-1 min-w-0"
+                      >
+                        <p className="text-sm font-bold text-white truncate group-hover/item:text-blue-400 transition-colors">
+                          Seguimiento: {player.nombre} {player.apellidos}
+                        </p>
+                        <p className="text-[10px] text-slate-500 uppercase font-black tracking-tighter mt-0.5">
+                          {player.posicion} • {player.equipo_actual || 'Sin club'}
+                        </p>
+                        <p className={cn(
+                          "text-[10px] uppercase font-black tracking-widest mt-2 flex items-center gap-1",
+                          getTextColorForBadge(player.estado)
+                        )}>
+                          <Clock className="w-3 h-3 shrink-0" />
+                          {formatDate(player.fecha_seguimiento!)}
+                        </p>
+                      </Link>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        title="Eliminar de la lista de seguimiento"
+                        className="text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-xl shrink-0 h-9 w-9 ml-3 transition-colors"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          handleRemoveFollowUp(player.id, `${player.nombre} ${player.apellidos}`);
+                        }}
+                      >
+                        <CalendarOff className="h-4 w-4" />
+                      </Button>
+                    </div>
                   ))
                 )}
              </div>
