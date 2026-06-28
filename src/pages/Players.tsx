@@ -49,6 +49,7 @@ import {
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { Label } from '@/components/ui/label';
 
 export default function Players() {
   const navigate = useNavigate();
@@ -212,103 +213,133 @@ export default function Players() {
 
       <Card className="premium-card">
         <CardContent className="p-5">
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-8 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-              <Input 
-                placeholder="Buscar por nombre..." 
-                className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500 rounded-xl"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-5">
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Nombre del Jugador</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Input 
+                  placeholder="Buscar por nombre..." 
+                  className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500 rounded-xl h-10"
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="relative">
-              <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
-              <Input 
-                placeholder="Equipo de origen..." 
-                className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500 rounded-xl"
-                value={filterEquipoActual}
-                onChange={(e) => setFilterEquipoActual(e.target.value)}
-              />
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equipo de Origen</Label>
+              <div className="relative">
+                <Search className="absolute left-3 top-3 h-4 w-4 text-slate-500" />
+                <Input 
+                  placeholder="Club de procedencia..." 
+                  className="pl-10 bg-slate-800/50 border-slate-700 text-slate-200 placeholder:text-slate-500 rounded-xl h-10"
+                  value={filterEquipoActual}
+                  onChange={(e) => setFilterEquipoActual(e.target.value)}
+                />
+              </div>
             </div>
-            <Select value={filterStatus} onValueChange={setFilterStatus}>
-              <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl">
-                <SelectValue placeholder="ESTADO" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">TODOS</SelectItem>
-                <SelectItem value="Observado">Observado</SelectItem>
-                <SelectItem value="En seguimiento">En seguimiento</SelectItem>
-                <SelectItem value="Interesa">Interesa</SelectItem>
-                <SelectItem value="Fichado">Fichado</SelectItem>
-                <SelectItem value="Rechazado">Rechazado</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterPosition} onValueChange={setFilterPosition}>
-              <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl">
-                <SelectValue placeholder="DEMARCACION" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">TODAS</SelectItem>
-                <SelectItem value="PORTERO">Portero</SelectItem>
-                <SelectItem value="CENTRAL">Central</SelectItem>
-                <SelectItem value="LATERAL">Lateral</SelectItem>
-                <SelectItem value="MEDIO CENTRO DEFENSIVO">MCD</SelectItem>
-                <SelectItem value="INTERIOR">Interior</SelectItem>
-                <SelectItem value="MEDIA PUNTA">Media Punta</SelectItem>
-                <SelectItem value="EXTREMO">Extremo</SelectItem>
-                <SelectItem value="DELANTERO">Delantero</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterLateralidad} onValueChange={setFilterLateralidad}>
-              <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl">
-                <SelectValue placeholder="LATERALIDAD" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">TODAS</SelectItem>
-                <SelectItem value="Derecho">Derecho</SelectItem>
-                <SelectItem value="Izquierdo">Izquierdo</SelectItem>
-                <SelectItem value="Ambidiestro">Ambidiestro</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={filterBirthYear} onValueChange={setFilterBirthYear}>
-              <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl">
-                <SelectValue placeholder="AÑO" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">TODOS</SelectItem>
-                {Array.from({ length: 25 }, (_, i) => 2000 + i).map(year => (
-                  <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={filterEquipoAsignado} onValueChange={setFilterEquipoAsignado}>
-              <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl">
-                <SelectValue placeholder="EQUIPO ASIGNADO" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="">TODOS LOS EQUIPOS</SelectItem>
-                <SelectItem value="SIN_ASIGNAR">Sin Asignar</SelectItem>
-                {CLUB_TEAMS.map((team) => (
-                  <SelectItem key={team} value={team}>{team}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button 
-              variant="outline" 
-              className="border-slate-700 hover:bg-slate-800 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-xl"
-              onClick={() => { 
-                setSearch(''); 
-                setFilterStatus(''); 
-                setFilterPosition(''); 
-                setFilterLateralidad('');
-                setFilterBirthYear('');
-                setFilterEquipoAsignado('');
-                setFilterEquipoActual('');
-              }}
-            >
-              Limpiar
-            </Button>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Estado de Captación</Label>
+              <Select value={filterStatus} onValueChange={setFilterStatus}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl h-10">
+                  <SelectValue placeholder="TODOS LOS ESTADOS" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">TODOS LOS ESTADOS</SelectItem>
+                  <SelectItem value="Observado">Observado</SelectItem>
+                  <SelectItem value="En seguimiento">En seguimiento</SelectItem>
+                  <SelectItem value="Interesa">Interesa</SelectItem>
+                  <SelectItem value="Fichado">Fichado</SelectItem>
+                  <SelectItem value="Rechazado">Rechazado</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Demarcación</Label>
+              <Select value={filterPosition} onValueChange={setFilterPosition}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl h-10">
+                  <SelectValue placeholder="TODAS LAS DEMARCACIONES" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">TODAS LAS DEMARCACIONES</SelectItem>
+                  <SelectItem value="PORTERO">Portero</SelectItem>
+                  <SelectItem value="CENTRAL">Central</SelectItem>
+                  <SelectItem value="LATERAL">Lateral</SelectItem>
+                  <SelectItem value="MEDIO CENTRO DEFENSIVO">MCD</SelectItem>
+                  <SelectItem value="INTERIOR">Interior</SelectItem>
+                  <SelectItem value="MEDIA PUNTA">Media Punta</SelectItem>
+                  <SelectItem value="EXTREMO">Extremo</SelectItem>
+                  <SelectItem value="DELANTERO">Delantero</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Lateralidad</Label>
+              <Select value={filterLateralidad} onValueChange={setFilterLateralidad}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl h-10">
+                  <SelectValue placeholder="TODAS LAS LATERALIDADES" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">TODAS LAS LATERALIDADES</SelectItem>
+                  <SelectItem value="Derecho">Derecho</SelectItem>
+                  <SelectItem value="Izquierdo">Izquierdo</SelectItem>
+                  <SelectItem value="Ambidiestro">Ambidiestro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Año de Nacimiento</Label>
+              <Select value={filterBirthYear} onValueChange={setFilterBirthYear}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl h-10">
+                  <SelectValue placeholder="TODOS LOS AÑOS" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">TODOS LOS AÑOS</SelectItem>
+                  {Array.from({ length: 25 }, (_, i) => 2000 + i).map(year => (
+                    <SelectItem key={year} value={year.toString()}>{year}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Equipo Asignado</Label>
+              <Select value={filterEquipoAsignado} onValueChange={setFilterEquipoAsignado}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl h-10">
+                  <SelectValue placeholder="TODOS LOS EQUIPOS" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">TODOS LOS EQUIPOS</SelectItem>
+                  <SelectItem value="SIN_ASIGNAR">Sin Asignar</SelectItem>
+                  {CLUB_TEAMS.map((team) => (
+                    <SelectItem key={team} value={team}>{team}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex flex-col justify-end">
+              <Button 
+                variant="outline" 
+                className="w-full h-10 border-slate-700 hover:bg-slate-800 text-slate-400 font-bold uppercase text-[10px] tracking-widest rounded-xl transition-all"
+                onClick={() => { 
+                  setSearch(''); 
+                  setFilterStatus(''); 
+                  setFilterPosition(''); 
+                  setFilterLateralidad('');
+                  setFilterBirthYear('');
+                  setFilterEquipoAsignado('');
+                  setFilterEquipoActual('');
+                }}
+              >
+                Limpiar Filtros
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
