@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
-import { Player, PlayerStatus, CLUB_TEAMS } from '@/types';
+import { Player, PlayerStatus, CLUB_TEAMS, Observer } from '@/types';
+import { getObservers } from '@/lib/observers';
 import { 
   Card, 
   CardContent, 
@@ -65,9 +66,23 @@ export default function Players() {
   const [filterBirthYear, setFilterBirthYear] = useState<string>('');
   const [filterEquipoAsignado, setFilterEquipoAsignado] = useState<string>('');
   const [filterEquipoActual, setFilterEquipoActual] = useState<string>('');
+  const [filterObservador, setFilterObservador] = useState<string>('');
+  const [observers, setObservers] = useState<Observer[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    const loadObservers = async () => {
+      try {
+        const list = await getObservers();
+        setObservers(list);
+      } catch (err) {
+        console.error('Error loading observers:', err);
+      }
+    };
+    loadObservers();
+  }, []);
 
   const fetchPlayers = async () => {
     setLoading(true);
@@ -99,6 +114,13 @@ export default function Players() {
       if (filterEquipoActual) {
         query = query.ilike('equipo_actual', `%${filterEquipoActual}%`);
       }
+      if (filterObservador) {
+        if (filterObservador === 'SIN_ASIGNAR') {
+          query = query.or('observador.is.null,observador.eq.""');
+        } else {
+          query = query.eq('observador', filterObservador);
+        }
+      }
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
@@ -112,7 +134,7 @@ export default function Players() {
 
   useEffect(() => {
     fetchPlayers();
-  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado, filterEquipoActual]);
+  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado, filterEquipoActual, filterObservador]);
 
   const requestDelete = (id: string) => {
     if (!isAdmin) {
@@ -323,6 +345,22 @@ export default function Players() {
               </Select>
             </div>
 
+            <div className="flex flex-col gap-1.5">
+              <Label className="text-xs font-bold text-slate-400 uppercase tracking-wider">Observador / Scout</Label>
+              <Select value={filterObservador} onValueChange={setFilterObservador}>
+                <SelectTrigger className="bg-slate-800/50 border-slate-700 rounded-xl h-10">
+                  <SelectValue placeholder="TODOS LOS OBSERVADORES" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">TODOS LOS OBSERVADORES</SelectItem>
+                  <SelectItem value="SIN_ASIGNAR">Sin Observador</SelectItem>
+                  {observers.map((obs) => (
+                    <SelectItem key={obs.id} value={obs.nombre}>{obs.nombre}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
             <div className="flex flex-col justify-end">
               <Button 
                 variant="outline" 
@@ -335,6 +373,7 @@ export default function Players() {
                   setFilterBirthYear('');
                   setFilterEquipoAsignado('');
                   setFilterEquipoActual('');
+                  setFilterObservador('');
                 }}
               >
                 Limpiar Filtros
