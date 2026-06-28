@@ -59,14 +59,25 @@ export default function Players() {
   const [players, setPlayers] = useState<Player[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [search, setSearch] = useState('');
-  const [filterStatus, setFilterStatus] = useState<string>('');
-  const [filterPosition, setFilterPosition] = useState<string>('');
-  const [filterLateralidad, setFilterLateralidad] = useState<string>('');
-  const [filterBirthYear, setFilterBirthYear] = useState<string>('');
-  const [filterEquipoAsignado, setFilterEquipoAsignado] = useState<string>('');
-  const [filterEquipoActual, setFilterEquipoActual] = useState<string>('');
-  const [filterObservador, setFilterObservador] = useState<string>('');
+  const [search, setSearch] = useState(() => sessionStorage.getItem('players_search') || '');
+  const [filterStatus, setFilterStatus] = useState<string>(() => sessionStorage.getItem('players_filterStatus') || '');
+  const [filterPosition, setFilterPosition] = useState<string>(() => sessionStorage.getItem('players_filterPosition') || '');
+  const [filterLateralidad, setFilterLateralidad] = useState<string>(() => sessionStorage.getItem('players_filterLateralidad') || '');
+  const [filterBirthYear, setFilterBirthYear] = useState<string>(() => sessionStorage.getItem('players_filterBirthYear') || '');
+  const [filterEquipoAsignado, setFilterEquipoAsignado] = useState<string>(() => sessionStorage.getItem('players_filterEquipoAsignado') || '');
+  const [filterEquipoActual, setFilterEquipoActual] = useState<string>(() => sessionStorage.getItem('players_filterEquipoActual') || '');
+  const [filterObservador, setFilterObservador] = useState<string>(() => sessionStorage.getItem('players_filterObservador') || '');
+
+  useEffect(() => {
+    sessionStorage.setItem('players_search', search);
+    sessionStorage.setItem('players_filterStatus', filterStatus);
+    sessionStorage.setItem('players_filterPosition', filterPosition);
+    sessionStorage.setItem('players_filterLateralidad', filterLateralidad);
+    sessionStorage.setItem('players_filterBirthYear', filterBirthYear);
+    sessionStorage.setItem('players_filterEquipoAsignado', filterEquipoAsignado);
+    sessionStorage.setItem('players_filterEquipoActual', filterEquipoActual);
+    sessionStorage.setItem('players_filterObservador', filterObservador);
+  }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado, filterEquipoActual, filterObservador]);
   const [observers, setObservers] = useState<Observer[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<string | null>(null);
@@ -197,6 +208,7 @@ export default function Players() {
               setFilterBirthYear('');
               setFilterEquipoAsignado('');
               setFilterEquipoActual('');
+              setFilterObservador('');
               toast.info('Se han restablecido todos los filtros para mostrar el total');
             }}
             className="bg-blue-600/15 hover:bg-blue-600/25 text-blue-400 border-blue-500/40 rounded-full font-extrabold text-sm md:text-base h-12 md:h-14 px-5 md:px-7 flex items-center gap-3 self-start sm:self-center shadow-lg shadow-blue-955/20 transition-all duration-300 transform hover:scale-[1.02]"
