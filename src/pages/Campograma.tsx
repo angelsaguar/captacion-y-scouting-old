@@ -26,7 +26,9 @@ import {
   Cloud,
   CloudLightning,
   CloudOff,
-  Database
+  Database,
+  Pencil,
+  X
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
@@ -281,6 +283,12 @@ export default function Campograma() {
   const [customName, setCustomName] = useState('');
   const [customDorsal, setCustomDorsal] = useState('');
   const [customPos, setCustomPos] = useState('');
+
+  // Editing player states
+  const [editingPlayerId, setEditingPlayerId] = useState<string | null>(null);
+  const [editName, setEditName] = useState('');
+  const [editDorsal, setEditDorsal] = useState('');
+  const [editPos, setEditPos] = useState('');
 
   // Bulk paste text state
   const [bulkText, setBulkText] = useState('');
@@ -652,6 +660,41 @@ export default function Campograma() {
     setCustomDorsal('');
     setCustomPos('');
     toast.success(`Se ha añadido a ${newPlayer.nombre} a la plantilla de ${selectedTeam}`);
+  };
+
+  // Edit individual player handlers
+  const handleStartEditPlayer = (player: PlayerRoster) => {
+    setEditingPlayerId(player.id);
+    setEditName(player.nombre);
+    setEditDorsal(player.dorsal ? String(player.dorsal) : '');
+    setEditPos(player.posicionOriginal || '');
+  };
+
+  const handleSavePlayerEdit = (playerId: string) => {
+    if (!editName.trim()) {
+      toast.error('El nombre no puede estar vacío');
+      return;
+    }
+
+    const updatedRoster = currentRoster.map(p => {
+      if (p.id === playerId) {
+        return {
+          ...p,
+          nombre: editName.trim(),
+          dorsal: editDorsal.trim() || undefined,
+          posicionOriginal: editPos.trim() || undefined
+        };
+      }
+      return p;
+    });
+
+    const nextRosters = {
+      ...rosters,
+      [selectedTeam]: updatedRoster
+    };
+    saveRostersToStorage(nextRosters);
+    setEditingPlayerId(null);
+    toast.success('Jugador actualizado');
   };
 
   // Delete individual player from roster
@@ -1435,7 +1478,7 @@ export default function Campograma() {
                       : 'border-transparent text-slate-400 hover:text-white'
                   }`}
                 >
-                  Rúbrica ({currentRoster.filter(p => !isPlayerAssigned(p.id)).length})
+                  Rúbrica ({currentRoster.length})
                 </button>
                 <button
                   onClick={() => setActiveRosterTab('bulk')}
@@ -1464,7 +1507,6 @@ export default function Campograma() {
               
               {/* TAB 1: PLUGGED PLAYERS LIST */}
               {activeRosterTab === 'roster' && (() => {
-                const unassignedPlayers = currentRoster.filter(p => !isPlayerAssigned(p.id));
                 return (
                   <div className="flex-1 flex flex-col space-y-3.5">
                     {currentRoster.length === 0 ? (
@@ -1484,48 +1526,120 @@ export default function Campograma() {
                           Cargar plantilla de prueba
                         </Button>
                       </div>
-                    ) : unassignedPlayers.length === 0 ? (
-                      <div className="flex-1 flex flex-col items-center justify-center text-center p-8 space-y-3.5 border border-dashed border-emerald-850/30 rounded-xl bg-emerald-950/5 min-h-64 justify-center">
-                        <div className="w-10 h-10 rounded-full bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-400">
-                          ✓
-                        </div>
-                        <div>
-                          <p className="text-sm font-bold text-emerald-300">¡Todos los jugadores asignados!</p>
-                          <p className="text-[11px] text-slate-400 mt-1 max-w-[220px] mx-auto">
-                            No quedan jugadores pendientes de asignar en el banquillo lateral.
-                          </p>
-                        </div>
-                      </div>
                     ) : (
                       <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
-                        {unassignedPlayers.map((player) => {
+                        {currentRoster.map((player) => {
+                          const assigned = isPlayerAssigned(player.id);
+                          const isEditing = editingPlayerId === player.id;
+
+                          if (isEditing) {
+                            return (
+                              <div 
+                                key={player.id} 
+                                className="bg-slate-900 border-2 border-blue-500/50 p-3 rounded-xl flex flex-col gap-2.5 animate-in fade-in zoom-in-95 duration-150"
+                              >
+                                <div className="space-y-1">
+                                  <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Nombre</label>
+                                  <Input 
+                                    value={editName}
+                                    onChange={(e) => setEditName(e.target.value)}
+                                    className="bg-slate-950 border-slate-800 text-xs h-8 text-white focus:ring-1 focus:ring-blue-500"
+                                    placeholder="Nombre del jugador"
+                                  />
+                                </div>
+                                <div className="grid grid-cols-2 gap-2">
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Dorsal</label>
+                                    <Input 
+                                      value={editDorsal}
+                                      onChange={(e) => setEditDorsal(e.target.value)}
+                                      className="bg-slate-950 border-slate-800 text-xs h-8 text-white font-mono focus:ring-1 focus:ring-blue-500"
+                                      placeholder="Nº"
+                                      type="number"
+                                      min="1"
+                                      max="99"
+                                    />
+                                  </div>
+                                  <div className="space-y-1">
+                                    <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Demarcación</label>
+                                    <Input 
+                                      value={editPos}
+                                      onChange={(e) => setEditPos(e.target.value)}
+                                      className="bg-slate-950 border-slate-800 text-xs h-8 text-white focus:ring-1 focus:ring-blue-500"
+                                      placeholder="Puesto"
+                                    />
+                                  </div>
+                                </div>
+                                <div className="flex justify-end gap-1.5 pt-1.5 border-t border-slate-800">
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    type="button"
+                                    onClick={() => setEditingPlayerId(null)}
+                                    className="h-7 px-2.5 text-[10px] font-bold uppercase text-slate-400 hover:text-white hover:bg-slate-850"
+                                  >
+                                    Cancelar
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    type="button"
+                                    onClick={() => handleSavePlayerEdit(player.id)}
+                                    className="h-7 px-3 text-[10px] font-bold uppercase bg-blue-600 hover:bg-blue-500 text-white"
+                                  >
+                                    Guardar
+                                  </Button>
+                                </div>
+                              </div>
+                            );
+                          }
+
                           return (
                             <div 
                               key={player.id} 
                               className="bg-slate-950/40 border border-slate-850 p-2.5 rounded-xl flex items-center justify-between group hover:border-slate-800 transition-colors"
                             >
-                              <div className="flex items-center gap-2.5 min-w-0">
+                              <div className="flex items-center gap-2.5 min-w-0 flex-1">
                                 {/* Jersey/Dorsal icon */}
-                                <div className="w-7 h-7 rounded bg-slate-900 text-slate-400 border border-slate-800 flex justify-center items-center text-xs font-bold font-mono">
+                                <div className="w-7 h-7 rounded bg-slate-900 text-slate-400 border border-slate-800 flex justify-center items-center text-xs font-bold font-mono shrink-0">
                                   {getDisplayDorsal(player) || '—'}
                                 </div>
-                                <div className="min-w-0">
-                                  <p className="text-xs font-extrabold text-white truncate">{player.nombre}</p>
+                                <div className="min-w-0 flex-1">
+                                  <div className="flex items-center gap-1.5">
+                                    <p className="text-xs font-extrabold text-white truncate">{player.nombre}</p>
+                                    {assigned ? (
+                                      <span className="text-[8px] bg-emerald-500/15 text-emerald-400 border border-emerald-500/20 px-1 rounded uppercase font-bold tracking-wider shrink-0">
+                                        En Campo
+                                      </span>
+                                    ) : (
+                                      <span className="text-[8px] bg-slate-900 text-slate-400 border border-slate-800 px-1 rounded uppercase font-bold tracking-wider shrink-0">
+                                        Banquillo
+                                      </span>
+                                    )}
+                                  </div>
                                   {player.posicionOriginal && (
-                                    <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold">{player.posicionOriginal}</p>
+                                    <p className="text-[9px] text-slate-500 uppercase tracking-wider font-bold mt-0.5">{player.posicionOriginal}</p>
                                   )}
                                 </div>
                               </div>
                               
-                              <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1 shrink-0 ml-2">
                                 {isAdminOrScout && (
-                                  <button
-                                    onClick={() => handleDeleteFromRoster(player.id)}
-                                    className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-red-950/20 transition-colors"
-                                    title="Quitar jugador de la plantilla"
-                                  >
-                                    <Trash2 className="w-3.5 h-3.5" />
-                                  </button>
+                                  <>
+                                    <button
+                                      onClick={() => handleStartEditPlayer(player)}
+                                      className="text-slate-400 hover:text-blue-400 p-1 rounded hover:bg-slate-900 transition-colors"
+                                      title="Editar jugador"
+                                    >
+                                      <Pencil className="w-3.5 h-3.5" />
+                                    </button>
+                                    <button
+                                      onClick={() => handleDeleteFromRoster(player.id)}
+                                      className="text-slate-600 hover:text-red-400 p-1 rounded hover:bg-red-950/20 transition-colors"
+                                      title="Quitar jugador de la plantilla"
+                                    >
+                                      <Trash2 className="w-3.5 h-3.5" />
+                                    </button>
+                                  </>
                                 )}
                               </div>
                             </div>
