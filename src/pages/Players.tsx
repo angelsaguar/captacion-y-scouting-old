@@ -495,18 +495,18 @@ export default function Players() {
                       <DropdownMenuItem onClick={() => navigate(`/players/${player.id}`)}>
                         <Eye className="w-4 h-4 mr-2" /> Ver detalle
                       </DropdownMenuItem>
+                      {(isAdmin || user?.role === 'scout') && (
+                        <DropdownMenuItem onClick={() => navigate(`/players/${player.id}/edit`)}>
+                          <Edit2 className="w-4 h-4 mr-2" /> Editar
+                        </DropdownMenuItem>
+                      )}
                       {isAdmin && (
-                        <>
-                          <DropdownMenuItem onClick={() => navigate(`/players/${player.id}/edit`)}>
-                            <Edit2 className="w-4 h-4 mr-2" /> Editar
-                          </DropdownMenuItem>
-                          <DropdownMenuItem 
-                            className="text-red-600 focus:text-red-600 cursor-pointer"
-                            onClick={() => requestDelete(player.id)}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" /> Eliminar
-                          </DropdownMenuItem>
-                        </>
+                        <DropdownMenuItem 
+                          className="text-red-600 focus:text-red-600 cursor-pointer"
+                          onClick={() => requestDelete(player.id)}
+                        >
+                          <Trash2 className="w-4 h-4 mr-2" /> Eliminar
+                        </DropdownMenuItem>
                       )}
                     </DropdownMenuContent>
                   </DropdownMenu>
@@ -600,7 +600,7 @@ export default function Players() {
                           <Eye className="h-4 w-4" />
                         </Button>
                       </Link>
-                       {isAdmin && (
+                       {(isAdmin || user?.role === 'scout') && (
                          <Link to={`/players/${player.id}/edit`}>
                            <Button variant="ghost" size="icon" className="h-10 w-10 text-slate-500 hover:text-white hover:bg-slate-800 rounded-xl">
                              <Edit2 className="h-4 w-4" />

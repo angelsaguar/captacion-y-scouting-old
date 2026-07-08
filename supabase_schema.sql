@@ -158,11 +158,11 @@ CREATE POLICY "Authenticated users can insert players" ON public.players
     FOR INSERT TO authenticated WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Only admins can update players" ON public.players;
-CREATE POLICY "Only admins can update players" ON public.players
+CREATE POLICY "Only admins and scouts can update players" ON public.players
     FOR UPDATE TO authenticated USING (
         EXISTS (
             SELECT 1 FROM public.users
-            WHERE users.id = auth.uid() AND users.role = 'admin'
+            WHERE users.id = auth.uid() AND (users.role = 'admin' OR users.role = 'scout')
         )
     );
 
@@ -185,11 +185,11 @@ CREATE POLICY "Authenticated users can insert attributes" ON public.player_attri
     FOR INSERT TO authenticated WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Only admins can update attributes" ON public.player_attributes;
-CREATE POLICY "Only admins can update attributes" ON public.player_attributes
+CREATE POLICY "Only admins and scouts can update attributes" ON public.player_attributes
     FOR UPDATE TO authenticated USING (
         EXISTS (
             SELECT 1 FROM public.users
-            WHERE users.id = auth.uid() AND users.role = 'admin'
+            WHERE users.id = auth.uid() AND (users.role = 'admin' OR users.role = 'scout')
         )
     );
 

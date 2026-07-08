@@ -32,8 +32,11 @@ export default function Login() {
     }
 
     const cleanEmail = email.trim().toLowerCase();
-    if (cleanEmail !== 'angel.saguar@telefonica.net') {
-      toast.error('Acceso restringido: Solo el administrador Ángel Saguar tiene permitido el acceso a la plataforma.');
+    const isSanti = cleanEmail.includes('santi');
+    const isAdmin = cleanEmail === 'angel.saguar@telefonica.net';
+
+    if (!isAdmin && !isSanti) {
+      toast.error('Acceso restringido: Solo el administrador Ángel Saguar y el observador SANTI tienen permitido el acceso a la plataforma.');
       return;
     }
 
@@ -47,9 +50,16 @@ export default function Login() {
 
       if (error) throw error;
 
-      if (data?.user?.email !== 'angel.saguar@telefonica.net') {
-        await supabase.auth.signOut();
-        throw new Error('Acceso restringido: Cuenta no autorizada.');
+      if (data?.user) {
+        const loggedEmail = data.user.email ? data.user.email.toLowerCase() : '';
+        const loggedNombre = (data.user.user_metadata?.nombre || '').toLowerCase();
+        const loggedIsSanti = loggedEmail.includes('santi') || loggedNombre.includes('santi');
+        const loggedIsAdmin = loggedEmail === 'angel.saguar@telefonica.net';
+
+        if (!loggedIsAdmin && !loggedIsSanti) {
+          await supabase.auth.signOut();
+          throw new Error('Acceso restringido: Cuenta no autorizada.');
+        }
       }
 
       toast.success('Sesión iniciada correctamente');
@@ -73,7 +83,7 @@ export default function Login() {
           {!isConfigured && (
             <div className="mb-4 p-3 bg-red-500/10 border border-red-500/20 rounded-xl flex items-center gap-3 text-red-500 text-xs font-bold animate-pulse">
               <AlertTriangle className="w-5 h-5 flex-shrink-0" />
-              <p className="text-left">Supabase no está configurado. Ve a Ajustes {'>'} Secretos y añade VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY.</p>
+              <p className="text-left">Supabase no está configurado. Ve a Ajustes {'>'} Secretos y añade VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY.</p>
             </div>
           )}
           <div className="flex justify-center mb-4">
@@ -83,7 +93,7 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-white uppercase">U.D. LA POVEDA SCOUTING</CardTitle>
           <CardDescription className="text-slate-400 font-medium">
-            Acceso restringido exclusivo para el administrador Ángel Saguar. El registro público está cerrado.
+            Acceso autorizado para el administrador Ángel Saguar y el observador SANTI.
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
@@ -95,7 +105,7 @@ export default function Login() {
                 <Input 
                   id="email" 
                   type="email" 
-                  placeholder="angel.saguar@telefonica.net" 
+                  placeholder="Introduce tu correo electrónico" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   className="bg-slate-800 border-slate-700 text-white pl-10 focus:ring-blue-600"
@@ -135,8 +145,8 @@ export default function Login() {
                 'ENTRAR A LA PLATAFORMA'
               )}
             </Button>
-            <p className="text-xs text-center text-slate-600 font-medium">
-              El auto-registro ha sido deshabilitado por motivos de seguridad.
+            <p className="text-xs text-center text-slate-400 font-medium mt-1">
+              ¿Eres el observador SANTI? <Link to="/register" className="text-blue-500 hover:underline font-bold">Regístrate aquí</Link>
             </p>
           </CardFooter>
         </form>

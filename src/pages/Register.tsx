@@ -41,6 +41,15 @@ export default function Register() {
         throw new Error('La Clave de Acceso es incorrecta. Pídela al administrador.');
       }
 
+      const cleanEmail = email.trim().toLowerCase();
+      const cleanNombre = nombre.trim().toLowerCase();
+      const isSanti = cleanEmail.includes('santi') || cleanNombre.includes('santi');
+      const isAdmin = cleanEmail === 'angel.saguar@telefonica.net';
+
+      if (!isAdmin && !isSanti) {
+        throw new Error('Acceso restringido: Solo se permite el registro al administrador Ángel Saguar y al observador SANTI.');
+      }
+
       // 1. Sign up user
       const { data, error: signUpError } = await supabase.auth.signUp({
         email,

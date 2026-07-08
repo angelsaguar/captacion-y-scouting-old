@@ -195,7 +195,7 @@ export default function PlayerDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 justify-end">
-          {isAdmin && (
+          {(isAdmin || user?.role === 'scout') && (
             <Link to={`/players/${player.id}/edit`}>
               <Button variant="outline"><Edit2 className="w-4 h-4 mr-2" /> Editar</Button>
             </Link>

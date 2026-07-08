@@ -6,6 +6,7 @@ import { useAuthStore } from '@/store/useAuthStore';
 import { supabase } from '@/lib/supabase';
 import Layout from '@/components/layout/Layout';
 import Login from '@/pages/Login';
+import Register from '@/pages/Register';
 import Dashboard from '@/pages/Dashboard';
 import Players from '@/pages/Players';
 import PlayerDetail from '@/pages/PlayerDetail';
@@ -66,7 +67,7 @@ export default function App() {
       <BrowserRouter>
         <Routes>
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
-          <Route path="/register" element={<Navigate to="/login" />} />
+          <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
           
           <Route element={user ? <Layout /> : <Navigate to="/login" />}>
             <Route path="/" element={<Dashboard />} />

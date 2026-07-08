@@ -104,7 +104,7 @@ export default function PlayerForm() {
   const selectedPosition = form.watch('posicion');
 
   useEffect(() => {
-    if (id && user && user.role !== 'admin') {
+    if (id && user && user.role !== 'admin' && user.role !== 'scout') {
       toast.error('No tienes permisos para editar jugadores.');
       navigate('/players');
     }
@@ -231,7 +231,7 @@ export default function PlayerForm() {
   };
 
   const onSubmit = async (values: PlayerFormValues) => {
-    if (id && user?.role !== 'admin') {
+    if (id && user?.role !== 'admin' && user?.role !== 'scout') {
       toast.error('No tienes permisos para editar jugadores.');
       return;
     }

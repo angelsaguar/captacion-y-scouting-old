@@ -153,7 +153,7 @@ DROP POLICY IF EXISTS "Scouts can insert players" ON public.players;
 CREATE POLICY "Scouts can insert players" ON public.players FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 DROP POLICY IF EXISTS "Only admins can update players" ON public.players;
-CREATE POLICY "Only admins can update players" ON public.players FOR UPDATE USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
+CREATE POLICY "Only admins can update players" ON public.players FOR UPDATE USING ((SELECT role FROM public.users WHERE id = auth.uid()) IN ('admin', 'scout'));
 
 DROP POLICY IF EXISTS "Only admins can delete players" ON public.players;
 CREATE POLICY "Only admins can delete players" ON public.players FOR DELETE USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
@@ -165,7 +165,7 @@ DROP POLICY IF EXISTS "Scouts can insert attributes" ON public.player_attributes
 CREATE POLICY "Scouts can insert attributes" ON public.player_attributes FOR INSERT WITH CHECK (auth.uid() IS NOT NULL);
 
 DROP POLICY IF EXISTS "Only admins can update attributes" ON public.player_attributes;
-CREATE POLICY "Only admins can update attributes" ON public.player_attributes FOR UPDATE USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
+CREATE POLICY "Only admins can update attributes" ON public.player_attributes FOR UPDATE USING ((SELECT role FROM public.users WHERE id = auth.uid()) IN ('admin', 'scout'));
 
 DROP POLICY IF EXISTS "Only admins can delete attributes" ON public.player_attributes;
 CREATE POLICY "Only admins can delete attributes" ON public.player_attributes FOR DELETE USING ((SELECT role FROM public.users WHERE id = auth.uid()) = 'admin');
