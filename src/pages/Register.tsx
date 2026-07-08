@@ -80,7 +80,12 @@ export default function Register() {
       toast.success('Cuenta creada con éxito. Revisa tu email si se requiere confirmación.');
       navigate('/login');
     } catch (error: any) {
-      toast.error(error.message || 'Error al registrarse');
+      const errMsg = error.message || '';
+      if (errMsg.toLowerCase().includes('already registered') || errMsg.toLowerCase().includes('already exists') || errMsg.toLowerCase().includes('existe')) {
+        toast.error('¡Ya estás registrado! Por favor, vuelve a la pantalla de Inicio de Sesión e ingresa tu correo y contraseña.');
+      } else {
+        toast.error(errMsg || 'Error al registrarse');
+      }
     } finally {
       setLoading(false);
     }
