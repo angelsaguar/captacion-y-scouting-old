@@ -134,7 +134,7 @@ export default function PlayerDetail() {
       // Default Spanish country code if 9 digits and no country code prefix
       clean = '34' + clean;
     }
-    const message = encodeURIComponent(`Hola, te contacto desde la dirección deportiva de la U.D. La Poveda en relación al seguimiento del jugador ${playerName || 'el jugador'}.`);
+    const message = encodeURIComponent(`Hola ${playerName || 'jugadora'},`);
     return `https://wa.me/${clean}?text=${message}`;
   };
 

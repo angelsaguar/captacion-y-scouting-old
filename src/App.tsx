@@ -7,6 +7,8 @@ import { supabase } from '@/lib/supabase';
 import Layout from '@/components/layout/Layout';
 import Login from '@/pages/Login';
 import Register from '@/pages/Register';
+import Home from '@/pages/Home';
+import GestionEquipo from '@/pages/GestionEquipo';
 import Dashboard from '@/pages/Dashboard';
 import Players from '@/pages/Players';
 import PlayerDetail from '@/pages/PlayerDetail';
@@ -69,8 +71,12 @@ export default function App() {
           <Route path="/login" element={!user ? <Login /> : <Navigate to="/" />} />
           <Route path="/register" element={!user ? <Register /> : <Navigate to="/" />} />
           
+          {/* Main Portal Landing Home */}
+          <Route path="/" element={user ? <Home /> : <Navigate to="/login" />} />
+          
           <Route element={user ? <Layout /> : <Navigate to="/login" />}>
-            <Route path="/" element={<Dashboard />} />
+            <Route path="/scouting" element={<Dashboard />} />
+            <Route path="/gestion-equipo" element={<GestionEquipo />} />
             <Route path="/players" element={<Players />} />
             <Route path="/players/new" element={<PlayerForm />} />
             <Route path="/players/:id" element={<PlayerDetail />} />

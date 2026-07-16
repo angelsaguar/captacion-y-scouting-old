@@ -263,3 +263,61 @@ CREATE POLICY "Anyone can insert/update tactics" ON public.tactics
 -- ==========================================================
 -- Ejecuta esta sección para dar de alta automáticamente el storage si tienes permiso de administrador:
 -- INSERT INTO storage.buckets (id, name, public) VALUES ('avatars', 'avatars', true) ON CONFLICT (id) DO NOTHING;
+
+
+-- ==========================================================
+-- 9. CREAR TABLA DE ASISTENCIA (ATTENDANCE SESSIONS)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.attendance_sessions (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team TEXT NOT NULL,
+    fecha DATE NOT NULL,
+    tipo TEXT NOT NULL,
+    descripcion TEXT,
+    records JSONB NOT NULL DEFAULT '[]'::jsonb,
+    tareas JSONB NOT NULL DEFAULT '[]'::jsonb,
+    archivos JSONB NOT NULL DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS para asistencia
+ALTER TABLE public.attendance_sessions ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view attendance sessions" ON public.attendance_sessions;
+CREATE POLICY "Anyone can view attendance sessions" ON public.attendance_sessions
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Anyone can manage attendance sessions" ON public.attendance_sessions;
+CREATE POLICY "Anyone can manage attendance sessions" ON public.attendance_sessions
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+
+-- ==========================================================
+-- 10. CREAR TABLA DE PLANES DE PARTIDO (MATCH PLANS)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.match_plans (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team TEXT NOT NULL,
+    rival_name TEXT NOT NULL,
+    fecha_partido DATE NOT NULL,
+    sistema TEXT NOT NULL,
+    sistema_rival TEXT NOT NULL,
+    convocatoria JSONB NOT NULL DEFAULT '[]'::jsonb,
+    objetivos_tacticos TEXT,
+    alineacion_propuesta TEXT,
+    puntos_fuertes_rival TEXT,
+    balon_parado TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS para planes de partido
+ALTER TABLE public.match_plans ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view match plans" ON public.match_plans;
+CREATE POLICY "Anyone can view match plans" ON public.match_plans
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Anyone can manage match plans" ON public.match_plans;
+CREATE POLICY "Anyone can manage match plans" ON public.match_plans
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
