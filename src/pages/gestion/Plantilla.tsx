@@ -23,7 +23,8 @@ import {
   Clock,
   Shield,
   Edit,
-  Save
+  Save,
+  Cloud
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -1158,6 +1159,65 @@ function FUTPlayerCard({ player, stats }: { player: TeamPlayer; stats: any }) {
   );
 }
 
+function getRatingLabel(val: number): string {
+  switch (val) {
+    case 0: return 'Muy deficiente';
+    case 1: return 'Deficiente';
+    case 2: return 'Mejorable';
+    case 3: return 'Correcto';
+    case 4: return 'Bueno';
+    case 5: return 'Excelente';
+    default: return 'Sin valorar';
+  }
+}
+
+const calculateFifaStatsFromScouting = (position: string, scoutAttrs: Record<string, number>) => {
+  const getAverageOfAttrs = (keys: string[]): number => {
+    let sum = 0;
+    let count = 0;
+    keys.forEach(k => {
+      if (typeof scoutAttrs[k] === 'number') {
+        sum += scoutAttrs[k];
+        count++;
+      }
+    });
+    return count > 0 ? sum / count : 3; // default to 3/5 if no attributes
+  };
+
+  const ritmoKeys = ['Velocidad', 'Aceleración', 'Explosividad', 'Cambios de ritmo', 'Agilidad'];
+  const tiroKeys = ['Definición', 'Disparo', 'Tiro', 'Remate', 'Finalización', 'Paradas de media/larga distancia', 'Uno contra uno con el portero'];
+  const paseKeys = ['Pase', 'Pase corto', 'Pase largo', 'Calidad del pase', 'Pase medio', 'Centros', 'Cambio de orientación', 'Asociación', 'Último pase', 'Saque con mano', 'Saque con pie'];
+  const regateKeys = ['Regate', 'Control orientado', 'Conducción', '1 vs 1', 'Desequilibrio', 'Uno contra uno', 'Juego con los pies', 'Visión', 'Creatividad', 'Primer toque'];
+  const defensaKeys = ['Marcaje', 'Anticipación', 'Entradas', 'Interceptaciones', 'Coberturas', 'Defensa del área', 'Colocación', 'Lectura del juego', 'Blocaje', 'Desvíos'];
+  const fisicoKeys = ['Resistencia', 'Fuerza', 'Potencia', 'Salto', 'Coordinación', 'Equilibrio', 'Agilidad'];
+
+  const rAvg = getAverageOfAttrs(ritmoKeys);
+  const tAvg = getAverageOfAttrs(tiroKeys);
+  const pAvg = getAverageOfAttrs(paseKeys);
+  const dAvg = getAverageOfAttrs(defensaKeys);
+  const drAvg = getAverageOfAttrs(regateKeys);
+  const fAvg = getAverageOfAttrs(fisicoKeys);
+
+  const ritmo = Math.round(50 + rAvg * 9);
+  const tiro = Math.round(50 + tAvg * 9);
+  const pase = Math.round(50 + pAvg * 9);
+  const regate = Math.round(50 + drAvg * 9);
+  const defensa = Math.round(50 + dAvg * 9);
+  const fisico = Math.round(50 + fAvg * 9);
+
+  const rating_general = Math.round((ritmo + tiro + pase + regate + defensa + fisico) / 6);
+
+  return {
+    ritmo: Math.min(Math.max(ritmo, 1), 99),
+    tiro: Math.min(Math.max(tiro, 1), 99),
+    pase: Math.min(Math.max(pase, 1), 99),
+    regate: Math.min(Math.max(regate, 1), 99),
+    defensa: Math.min(Math.max(defensa, 1), 99),
+    fisico: Math.min(Math.max(fisico, 1), 99),
+    rating_general: Math.min(Math.max(rating_general, 1), 99)
+  };
+};
+
 export default function Plantilla() {
   const [selectedTeam, setSelectedTeam] = useState<string>(CLUB_TEAMS[0]);
   const [players, setPlayers] = useState<TeamPlayer[]>([]);
@@ -1179,6 +1239,7 @@ export default function Plantilla() {
   
   // Stats and FIFA attributes editing state
   const [isEditingStats, setIsEditingStats] = useState(false);
+  const [editableAttributes, setEditableAttributes] = useState<Record<string, number>>({});
   const [statsForm, setStatsForm] = useState({
     partidos_jugados: 14,
     minutos_jugados: 1120,
@@ -1412,12 +1473,19 @@ export default function Plantilla() {
 
           if (!error && data) {
             setProfileAttributes(data);
+            const attrMap: Record<string, number> = {};
+            data.forEach(item => {
+              attrMap[item.atributo] = item.valor;
+            });
+            setEditableAttributes(attrMap);
           } else {
             setProfileAttributes([]);
+            setEditableAttributes({});
           }
         } catch (err) {
           console.error("Error fetching player profile attributes", err);
           setProfileAttributes([]);
+          setEditableAttributes({});
         }
       };
 
@@ -1498,31 +1566,294 @@ export default function Plantilla() {
     }
   };
 
+  const [isSyncing, setIsSyncing] = useState(false);
+
+  const handleSyncToSupabase = async () => {
+    setIsSyncing(true);
+    const toastId = toast.loading('Sincronizando plantilla, partidos y asistencia con Supabase...');
+    try {
+      // 1. Sync Players
+      const updatedPlayers = [...players];
+      let playerChanges = false;
+      let playerSuccess = 0;
+      let playerError = 0;
+
+      for (let i = 0; i < updatedPlayers.length; i++) {
+        const player = updatedPlayers[i];
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(player.id);
+        
+        let targetId = player.id;
+        if (!isUuid) {
+          targetId = crypto.randomUUID();
+          updatedPlayers[i] = { ...player, id: targetId };
+          playerChanges = true;
+        }
+
+        const playerPayload = {
+          id: targetId,
+          nombre: player.nombre,
+          apellidos: player.apellidos,
+          posicion: player.posicion,
+          dorsal: player.dorsal || null,
+          lateralidad: player.lateralidad || 'Derecho',
+          anio_nacimiento: player.anio_nacimiento ? parseInt(player.anio_nacimiento as any) : null,
+          telefono: player.telefono || null,
+          email: player.email || null,
+          foto_url: player.foto_url || null,
+          estado: 'Fichado',
+          equipo_asignado: selectedTeam
+        };
+
+        const { error } = await supabase
+          .from('players')
+          .upsert(playerPayload);
+
+        if (error) {
+          console.error(`Error syncing player ${player.nombre}:`, error);
+          playerError++;
+        } else {
+          playerSuccess++;
+        }
+      }
+
+      if (playerChanges) {
+        saveRoster(updatedPlayers);
+      }
+
+      // 2. Sync Matches
+      const matchesKey = `team_matches_${selectedTeam}`;
+      const savedMatches = localStorage.getItem(matchesKey);
+      let matchesSuccess = 0;
+      let matchesError = 0;
+      let matchesChanges = false;
+
+      if (savedMatches) {
+        const localMatches = JSON.parse(savedMatches);
+        const updatedMatches = [...localMatches];
+
+        for (let i = 0; i < updatedMatches.length; i++) {
+          const match = updatedMatches[i];
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(match.id);
+          
+          let targetId = match.id;
+          if (!isUuid) {
+            targetId = crypto.randomUUID();
+            updatedMatches[i] = { ...match, id: targetId };
+            matchesChanges = true;
+          }
+
+          const matchPayload = {
+            id: targetId,
+            team: selectedTeam,
+            rival: match.rival,
+            fecha: match.fecha,
+            hora: match.hora,
+            tipo: match.tipo,
+            competicion: match.competicion,
+            estado: match.estado,
+            goles_favor: match.goles_favor !== undefined ? match.goles_favor : null,
+            goles_contra: match.goles_contra !== undefined ? match.goles_contra : null,
+            acta: match.acta || null,
+            estadisticas: match.estadisticas || {}
+          };
+
+          const { error } = await supabase
+            .from('team_matches')
+            .upsert(matchPayload);
+
+          if (error) {
+            console.error(`Error syncing match with ${match.rival}:`, error);
+            matchesError++;
+          } else {
+            matchesSuccess++;
+          }
+        }
+
+        if (matchesChanges) {
+          localStorage.setItem(matchesKey, JSON.stringify(updatedMatches));
+        }
+      }
+
+      // 3. Sync Attendance Sessions
+      const sessionsKey = `team_sessions_${selectedTeam}`;
+      const savedSessions = localStorage.getItem(sessionsKey);
+      let sessionsSuccess = 0;
+      let sessionsError = 0;
+      let sessionsChanges = false;
+
+      if (savedSessions) {
+        const localSessions = JSON.parse(savedSessions);
+        const updatedSessions = [...localSessions];
+
+        for (let i = 0; i < updatedSessions.length; i++) {
+          const session = updatedSessions[i];
+          const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(session.id);
+          
+          let targetId = session.id;
+          if (!isUuid) {
+            targetId = crypto.randomUUID();
+            updatedSessions[i] = { ...session, id: targetId };
+            sessionsChanges = true;
+          }
+
+          const sessionPayload = {
+            id: targetId,
+            team: selectedTeam,
+            fecha: session.fecha,
+            tipo: session.tipo,
+            descripcion: session.descripcion || null,
+            records: session.records || [],
+            tareas: session.tareas || [],
+            archivos: session.archivos || []
+          };
+
+          const { error } = await supabase
+            .from('attendance_sessions')
+            .upsert(sessionPayload);
+
+          if (error) {
+            console.error(`Error syncing session from ${session.fecha}:`, error);
+            sessionsError++;
+          } else {
+            sessionsSuccess++;
+          }
+        }
+
+        if (sessionsChanges) {
+          localStorage.setItem(sessionsKey, JSON.stringify(updatedSessions));
+        }
+      }
+
+      // Final Feedback
+      if (playerError === 0 && matchesError === 0 && sessionsError === 0) {
+        toast.success(`Sincronización completa: ${playerSuccess} jugadoras, ${matchesSuccess} partidos y ${sessionsSuccess} sesiones subidos a Supabase.`, { id: toastId });
+      } else {
+        toast.warning(`Sincronización parcial: ${playerSuccess} jugadoras (${playerError} errores), ${matchesSuccess} partidos (${matchesError} errores), ${sessionsSuccess} sesiones (${sessionsError} errores) subidos.`, { id: toastId });
+      }
+
+      // Refresh DB data
+      fetchSignedScoutingPlayers();
+    } catch (err: any) {
+      console.error("Critical error during sync", err);
+      toast.error("Error crítico durante la sincronización: " + (err.message || err), { id: toastId });
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
   const saveRoster = (updated: TeamPlayer[]) => {
     setPlayers(updated);
     localStorage.setItem(`team_roster_${selectedTeam}`, JSON.stringify(updated));
   };
 
-  const handleSavePlayerStats = (e: React.FormEvent) => {
+  const handleSavePlayerStats = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedPlayerProfile) return;
 
-    const updatedPlayers = players.map(p => {
-      if (p.id === selectedPlayerProfile.id) {
-        const updated = {
-          ...p,
-          ...statsForm
-        };
-        // Update selectedPlayerProfile state so the UI reflects the saved values
-        setSelectedPlayerProfile(updated);
-        return updated;
-      }
-      return p;
-    });
+    try {
+      // 1. Calculate FIFA attributes from the 0-5 scouting ratings in editableAttributes
+      const fifaStats = calculateFifaStatsFromScouting(selectedPlayerProfile.posicion, editableAttributes);
 
-    saveRoster(updatedPlayers);
-    setIsEditingStats(false);
-    toast.success(`Estadísticas de ${selectedPlayerProfile.nombre} actualizadas con éxito.`);
+      // 2. Prepare the player object with season stats and calculated FIFA attributes
+      const updatedPlayers = players.map(p => {
+        if (p.id === selectedPlayerProfile.id) {
+          const updated = {
+            ...p,
+            partidos_jugados: statsForm.partidos_jugados,
+            minutos_jugados: statsForm.minutos_jugados,
+            goles: statsForm.goles,
+            asistencias: statsForm.asistencias,
+            tarjetas_amarillas: statsForm.tarjetas_amarillas,
+            tarjetas_rojas: statsForm.tarjetas_rojas,
+            asistencia_entrenamientos: statsForm.asistencia_entrenamientos,
+            ...fifaStats // ritmo, tiro, pase, regate, defensa, fisico, rating_general
+          };
+          // Update selectedPlayerProfile state so the UI reflects the saved values
+          setSelectedPlayerProfile(updated);
+          return updated;
+        }
+        return p;
+      });
+
+      // 3. Save roster to local storage
+      saveRoster(updatedPlayers);
+
+      // 4. Save 0-5 scouting attributes to Supabase
+      // First, get or create the player ID in Supabase players table
+      let dbPlayerId = selectedPlayerProfile.id;
+      const match = scoutingSignedPlayers.find(p => 
+        p.id === selectedPlayerProfile.id || 
+        `${p.nombre.trim()} ${p.apellidos.trim()}`.toLowerCase() === `${selectedPlayerProfile.nombre.trim()} ${selectedPlayerProfile.apellidos.trim()}`.toLowerCase()
+      );
+      if (match) {
+        dbPlayerId = match.id;
+      } else {
+        // Create the player in Supabase so we have a valid record to attach attributes to
+        try {
+          const { data: insertedPlayer, error: insertError } = await supabase
+            .from('players')
+            .insert({
+              id: selectedPlayerProfile.id,
+              nombre: selectedPlayerProfile.nombre,
+              apellidos: selectedPlayerProfile.apellidos,
+              posicion: selectedPlayerProfile.posicion,
+              dorsal: selectedPlayerProfile.dorsal || null,
+              lateralidad: selectedPlayerProfile.lateralidad || 'Derecho',
+              anio_nacimiento: selectedPlayerProfile.anio_nacimiento ? parseInt(selectedPlayerProfile.anio_nacimiento as any) : null,
+              telefono: selectedPlayerProfile.telefono || null,
+              email: selectedPlayerProfile.email || null,
+              foto_url: selectedPlayerProfile.foto_url || null,
+              estado: 'Fichado',
+              equipo_asignado: selectedTeam
+            })
+            .select()
+            .single();
+
+          if (!insertError && insertedPlayer) {
+            dbPlayerId = insertedPlayer.id;
+          }
+        } catch (err) {
+          console.warn("Could not auto-provision player in scouting DB:", err);
+        }
+      }
+
+      // Prepare attributes payload
+      const position = selectedPlayerProfile.posicion;
+      // Get all specific and common attributes for this position
+      const specific = (POSITION_STRUCTURED_ATTRIBUTES[position] || []).flatMap(g => g.items);
+      const common = COMMON_ATTRIBUTES.flatMap(g => g.items);
+      const allAttrs = Array.from(new Set([...specific, ...common]));
+
+      const attributePayloads = allAttrs.map(attr => ({
+        player_id: dbPlayerId,
+        atributo: attr,
+        valor: typeof editableAttributes[attr] === 'number' ? editableAttributes[attr] : 0
+      }));
+
+      // Delete existing attributes for clean write
+      await supabase.from('player_attributes').delete().eq('player_id', dbPlayerId);
+
+      // Save to Supabase
+      const { error: attrError } = await supabase
+        .from('player_attributes')
+        .upsert(attributePayloads);
+
+      if (attrError) {
+        console.error("Error upserting player attributes in Plantilla:", attrError);
+        toast.warning("Estadísticas guardadas en local, pero hubo un problema al sincronizar con Supabase.");
+      } else {
+        toast.success(`Estadísticas y Valoraciones de ${selectedPlayerProfile.nombre} guardadas y sincronizadas con éxito.`);
+        // Refresh local profile attributes state
+        setProfileAttributes(attributePayloads);
+      }
+
+      setIsEditingStats(false);
+      // Refresh database records
+      fetchSignedScoutingPlayers();
+    } catch (err: any) {
+      console.error("Error saving player stats", err);
+      toast.error("Error al guardar las estadísticas: " + (err.message || err));
+    }
   };
 
   const handleAddPlayer = (e: React.FormEvent) => {
@@ -1629,7 +1960,17 @@ export default function Plantilla() {
           </select>
         </div>
 
-        <div className="w-full sm:w-auto flex gap-2">
+        <div className="w-full sm:w-auto flex flex-wrap gap-2">
+          <Button 
+            onClick={handleSyncToSupabase}
+            disabled={isSyncing}
+            variant="outline"
+            className="flex-1 sm:flex-none text-xs font-bold uppercase tracking-wider border-blue-500/30 hover:bg-blue-950/20 text-blue-400 hover:text-blue-300 flex items-center gap-2"
+          >
+            <Cloud className={cn("w-4 h-4 text-blue-400 animate-pulse", isSyncing && "animate-spin")} />
+            <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar Cloud'}</span>
+          </Button>
+
           <Button 
             onClick={() => setShowImportDialog(true)}
             variant="outline" 
@@ -2113,91 +2454,161 @@ export default function Plantilla() {
                       </div>
                     </div>
 
-                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-3">
-                      <h5 className="text-[11px] text-amber-500 font-extrabold uppercase tracking-wider border-b border-slate-900 pb-1.5 flex items-center gap-1.5">
-                        <Award className="w-4 h-4 text-amber-500" />
-                        <span>Atributos Estilo FIFA (0 - 99)</span>
-                      </h5>
-                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Media General (OVR)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.rating_general}
-                            onChange={(e) => setStatsForm({...statsForm, rating_general: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-amber-400 focus:outline-none focus:border-amber-500 mt-1 font-black"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Ritmo (PAC)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.ritmo}
-                            onChange={(e) => setStatsForm({...statsForm, ritmo: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Tiro (SHO)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.tiro}
-                            onChange={(e) => setStatsForm({...statsForm, tiro: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Pase (PAS)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.pase}
-                            onChange={(e) => setStatsForm({...statsForm, pase: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Regate (DRI)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.regate}
-                            onChange={(e) => setStatsForm({...statsForm, regate: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Defensa (DEF)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.defensa}
-                            onChange={(e) => setStatsForm({...statsForm, defensa: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-[10px] text-slate-400 font-bold uppercase">Físico (PHY)</label>
-                          <input 
-                            type="number" 
-                            min="1"
-                            max="99"
-                            value={statsForm.fisico}
-                            onChange={(e) => setStatsForm({...statsForm, fisico: parseInt(e.target.value) || 50})}
-                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
-                          />
-                        </div>
-                      </div>
-                    </div>
+                    {/* Dynamic Scouting attributes depending on player position */}
+                    {(() => {
+                      const specificGroups = POSITION_STRUCTURED_ATTRIBUTES[selectedPlayerProfile.posicion] || [];
+                      return (
+                        <>
+                          <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-4">
+                            <h5 className="text-[11px] text-amber-500 font-extrabold uppercase tracking-wider border-b border-slate-900 pb-1.5 flex items-center gap-1.5">
+                              <Award className="w-4 h-4 text-amber-500" />
+                              <span>Valoración Técnica de la Demarcación ({selectedPlayerProfile.posicion})</span>
+                            </h5>
+                            <div className="space-y-6 text-left">
+                              {specificGroups.map((group) => (
+                                <div key={group.category} className="space-y-3">
+                                  <h6 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-900 inline-block">
+                                    {group.category}
+                                  </h6>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {group.items.map((attr) => (
+                                      <div key={attr} className="space-y-2 bg-slate-950/30 p-2.5 rounded-xl border border-slate-900/40">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">{attr}</span>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={cn(
+                                              "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
+                                              (editableAttributes[attr] || 0) === 0 && "bg-red-950/30 border-red-500/20 text-red-400",
+                                              (editableAttributes[attr] || 0) === 1 && "bg-red-500/10 border-red-500/20 text-red-350",
+                                              (editableAttributes[attr] || 0) === 2 && "bg-orange-500/10 border-orange-500/20 text-orange-400",
+                                              (editableAttributes[attr] || 0) === 3 && "bg-yellow-500/10 border-yellow-500/20 text-yellow-400",
+                                              (editableAttributes[attr] || 0) === 4 && "bg-blue-500/10 border-blue-500/20 text-blue-400",
+                                              (editableAttributes[attr] || 0) === 5 && "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                            )}>
+                                              {getRatingLabel(editableAttributes[attr] || 0)}
+                                            </span>
+                                            <span className={cn(
+                                              "text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center",
+                                              (editableAttributes[attr] || 0) === 0 && "bg-red-700 text-white",
+                                              (editableAttributes[attr] || 0) === 1 && "bg-red-500 text-white",
+                                              (editableAttributes[attr] || 0) === 2 && "bg-orange-500 text-white",
+                                              (editableAttributes[attr] || 0) === 3 && "bg-yellow-500 text-slate-950",
+                                              (editableAttributes[attr] || 0) === 4 && "bg-blue-500 text-white",
+                                              (editableAttributes[attr] || 0) === 5 && "bg-emerald-600 text-white"
+                                            )}>
+                                              {editableAttributes[attr] || 0}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex justify-between gap-1">
+                                          {[0, 1, 2, 3, 4, 5].map((val) => (
+                                            <button
+                                              key={val}
+                                              type="button"
+                                              onClick={() => setEditableAttributes(prev => ({ ...prev, [attr]: val }))}
+                                              className={cn(
+                                                "flex-1 h-7 rounded-md flex items-center justify-center text-[10px] font-black transition-all border",
+                                                (editableAttributes[attr] || 0) === val 
+                                                  ? cn(
+                                                      "text-white shadow-sm",
+                                                      val === 0 && "bg-red-700 border-red-650",
+                                                      val === 1 && "bg-red-500 border-red-400",
+                                                      val === 2 && "bg-orange-500 border-orange-400",
+                                                      val === 3 && "bg-yellow-500 border-yellow-400 text-slate-950",
+                                                      val === 4 && "bg-blue-500 border-blue-400",
+                                                      val === 5 && "bg-emerald-600 border-emerald-500"
+                                                    )
+                                                  : "bg-slate-900 border-slate-850 text-slate-500 hover:bg-slate-800"
+                                              )}
+                                            >
+                                              {val}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-4">
+                            <h5 className="text-[11px] text-blue-400 font-extrabold uppercase tracking-wider border-b border-slate-900 pb-1.5 flex items-center gap-1.5">
+                              <Award className="w-4 h-4 text-blue-500" />
+                              <span>Aspectos Comunes a Todas las Posiciones</span>
+                            </h5>
+                            <div className="space-y-6 text-left">
+                              {COMMON_ATTRIBUTES.map((group) => (
+                                <div key={group.category} className="space-y-3">
+                                  <h6 className="text-[10px] font-bold text-slate-400 uppercase tracking-wider bg-slate-950 px-2.5 py-1 rounded-lg border border-slate-900 inline-block">
+                                    {group.category}
+                                  </h6>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {group.items.map((attr) => (
+                                      <div key={attr} className="space-y-2 bg-slate-950/30 p-2.5 rounded-xl border border-slate-900/40">
+                                        <div className="flex justify-between items-center">
+                                          <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300">{attr}</span>
+                                          <div className="flex items-center gap-1.5">
+                                            <span className={cn(
+                                              "text-[8px] font-black uppercase px-1.5 py-0.5 rounded border",
+                                              (editableAttributes[attr] || 0) === 0 && "bg-red-950/30 border-red-500/20 text-red-400",
+                                              (editableAttributes[attr] || 0) === 1 && "bg-red-500/10 border-red-500/20 text-red-350",
+                                              (editableAttributes[attr] || 0) === 2 && "bg-orange-500/10 border-orange-500/20 text-orange-400",
+                                              (editableAttributes[attr] || 0) === 3 && "bg-yellow-500/10 border-yellow-500/20 text-yellow-400",
+                                              (editableAttributes[attr] || 0) === 4 && "bg-blue-500/10 border-blue-500/20 text-blue-400",
+                                              (editableAttributes[attr] || 0) === 5 && "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                            )}>
+                                              {getRatingLabel(editableAttributes[attr] || 0)}
+                                            </span>
+                                            <span className={cn(
+                                              "text-[10px] font-black w-5 h-5 rounded-full flex items-center justify-center",
+                                              (editableAttributes[attr] || 0) === 0 && "bg-red-700 text-white",
+                                              (editableAttributes[attr] || 0) === 1 && "bg-red-500 text-white",
+                                              (editableAttributes[attr] || 0) === 2 && "bg-orange-500 text-white",
+                                              (editableAttributes[attr] || 0) === 3 && "bg-yellow-500 text-slate-950",
+                                              (editableAttributes[attr] || 0) === 4 && "bg-blue-500 text-white",
+                                              (editableAttributes[attr] || 0) === 5 && "bg-emerald-600 text-white"
+                                            )}>
+                                              {editableAttributes[attr] || 0}
+                                            </span>
+                                          </div>
+                                        </div>
+                                        <div className="flex justify-between gap-1">
+                                          {[0, 1, 2, 3, 4, 5].map((val) => (
+                                            <button
+                                              key={val}
+                                              type="button"
+                                              onClick={() => setEditableAttributes(prev => ({ ...prev, [attr]: val }))}
+                                              className={cn(
+                                                "flex-1 h-7 rounded-md flex items-center justify-center text-[10px] font-black transition-all border",
+                                                (editableAttributes[attr] || 0) === val 
+                                                  ? cn(
+                                                      "text-white shadow-sm",
+                                                      val === 0 && "bg-red-700 border-red-650",
+                                                      val === 1 && "bg-red-500 border-red-400",
+                                                      val === 2 && "bg-orange-500 border-orange-400",
+                                                      val === 3 && "bg-yellow-500 border-yellow-400 text-slate-950",
+                                                      val === 4 && "bg-blue-500 border-blue-400",
+                                                      val === 5 && "bg-emerald-600 border-emerald-500"
+                                                    )
+                                                  : "bg-slate-900 border-slate-850 text-slate-500 hover:bg-slate-800"
+                                              )}
+                                            >
+                                              {val}
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        </>
+                      );
+                    })()}
 
                     <div className="flex justify-end gap-2 pt-2 border-t border-slate-850">
                       <Button 
