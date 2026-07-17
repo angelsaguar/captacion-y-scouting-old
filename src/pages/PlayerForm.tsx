@@ -11,7 +11,9 @@ import {
   ContactType, 
   Lateralidad,
   Observer,
-  CLUB_TEAMS
+  CLUB_TEAMS,
+  POSITION_STRUCTURED_ATTRIBUTES,
+  COMMON_ATTRIBUTES
 } from '@/types';
 import { 
   Card, 
@@ -68,6 +70,18 @@ import { getObservers, addObserver } from '@/lib/observers';
 });
 
 type PlayerFormValues = z.infer<typeof playerSchema>;
+
+function getRatingLabel(val: number): string {
+  switch (val) {
+    case 0: return 'Muy deficiente';
+    case 1: return 'Deficiente';
+    case 2: return 'Mejorable';
+    case 3: return 'Correcto';
+    case 4: return 'Bueno';
+    case 5: return 'Excelente';
+    default: return 'Sin valorar';
+  }
+}
 
 export default function PlayerForm() {
   const { id } = useParams();
@@ -183,6 +197,22 @@ export default function PlayerForm() {
     });
     setAttributes(newAttributes);
   }, [selectedPosition]);
+
+  useEffect(() => {
+    const currentAttrs = POSITION_ATTRIBUTES[selectedPosition] || [];
+    const ratedVals = currentAttrs
+      .map(attr => attributes[attr])
+      .filter(val => val !== undefined && val !== null && val > 0);
+    
+    if (ratedVals.length > 0) {
+      const sum = ratedVals.reduce((acc, v) => acc + v, 0);
+      const average = sum / ratedVals.length;
+      const roundedPotential = Math.max(1, Math.min(5, Math.round(average)));
+      form.setValue('potencial', roundedPotential);
+    } else {
+      form.setValue('potencial', 3);
+    }
+  }, [attributes, selectedPosition]);
 
   const handlePhotoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -475,15 +505,20 @@ export default function PlayerForm() {
               </div>
 
               <div className="space-y-4 text-center pt-4">
-                <Label className="text-sm font-bold uppercase tracking-widest text-slate-500">Potencial Estimado (1-5)</Label>
+                <div className="space-y-1">
+                  <Label className="text-sm font-bold uppercase tracking-widest text-slate-500 block">Potencial Estimado (1-5)</Label>
+                  <span className="text-[10px] text-emerald-400 font-mono uppercase tracking-wider block">
+                    Calculado automáticamente como la media de sus valoraciones
+                  </span>
+                </div>
                 <div className="flex justify-center gap-2 py-2">
                   {[1, 2, 3, 4, 5].map((val) => (
                     <button
                       key={val}
                       type="button"
-                      onClick={() => form.setValue('potencial', val)}
+                      disabled
                       className={cn(
-                        "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black transition-all border",
+                        "w-12 h-12 rounded-xl flex items-center justify-center text-lg font-black transition-all border cursor-default",
                         form.watch('potencial') === val 
                           ? cn(
                               "text-white shadow-lg scale-110",
@@ -493,7 +528,7 @@ export default function PlayerForm() {
                               val === 4 && "bg-lime-600 border-lime-500 shadow-lime-900/40",
                               val === 5 && "bg-emerald-600 border-emerald-500 shadow-emerald-900/40"
                             )
-                          : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700"
+                          : "bg-slate-800 border-slate-700 text-slate-500"
                       )}
                     >
                       {val}
@@ -713,56 +748,157 @@ export default function PlayerForm() {
         <Card className="border-none shadow-sm bg-slate-900 text-white">
           <CardHeader>
             <CardTitle className="text-xl">Valoración Técnica: {selectedPosition}</CardTitle>
-            <CardDescription className="text-slate-400">Puntúa cada atributo técnico-táctico específico de la posición (0-5).</CardDescription>
+            <CardDescription className="text-slate-400">Puntúa cada atributo técnico-táctico específico de la posición y los ítems comunes (0-5).</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-8 py-4">
-              {(POSITION_ATTRIBUTES[selectedPosition] || []).map((attr) => (
-                <div key={attr} className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <Label className="text-sm font-bold uppercase tracking-wider text-slate-300">{attr}</Label>
-                    <span className={cn(
-                      "text-xl font-black w-8 h-8 rounded-full flex items-center justify-center transition-colors",
-                      (attributes[attr] || 0) === 1 && "bg-red-600 text-white",
-                      (attributes[attr] || 0) === 2 && "bg-orange-600 text-white",
-                      (attributes[attr] || 0) === 3 && "bg-yellow-600 text-white",
-                      (attributes[attr] || 0) === 4 && "bg-lime-600 text-white",
-                      (attributes[attr] || 0) === 5 && "bg-emerald-600 text-white",
-                      (attributes[attr] || 0) === 0 && "bg-slate-700 text-slate-400"
-                    )}>
-                      {attributes[attr] || 0}
-                    </span>
-                  </div>
-                  <div className="flex justify-between gap-2">
-                    {[1, 2, 3, 4, 5].map((val) => (
-                      <button
-                        key={val}
-                        type="button"
-                        onClick={() => setAttributes(prev => ({ ...prev, [attr]: val }))}
-                        className={cn(
-                          "flex-1 h-10 rounded-xl flex items-center justify-center text-sm font-black transition-all border",
-                          (attributes[attr] || 0) === val 
-                            ? cn(
-                                "text-white shadow-lg",
-                                val === 1 && "bg-red-600 border-red-500 shadow-red-900/40",
-                                val === 2 && "bg-orange-600 border-orange-500 shadow-orange-900/40",
-                                val === 3 && "bg-yellow-600 border-yellow-500 shadow-yellow-900/40",
-                                val === 4 && "bg-lime-600 border-lime-500 shadow-lime-900/40",
-                                val === 5 && "bg-emerald-600 border-emerald-500 shadow-emerald-900/40"
-                              )
-                            : "bg-slate-800 border-slate-700 text-slate-400 hover:bg-slate-700"
-                        )}
-                      >
-                        {val}
-                      </button>
-                    ))}
-                  </div>
-                  <div className="flex justify-between text-[10px] text-slate-500 font-bold uppercase">
-                    <span>Deficiente</span>
-                    <span>Élite</span>
-                  </div>
+            <div className="space-y-10">
+              {/* Aspectos Específicos */}
+              <div>
+                <h3 className="text-sm font-black text-emerald-400 uppercase tracking-widest border-b border-slate-800 pb-2 mb-6">
+                  Aspectos Específicos de la Demarcación ({selectedPosition})
+                </h3>
+                <div className="space-y-8">
+                  {(POSITION_STRUCTURED_ATTRIBUTES[selectedPosition] || []).map((group) => (
+                    <div key={group.category} className="space-y-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-850 inline-block">
+                        {group.category}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                        {group.items.map((attr) => (
+                          <div key={attr} className="space-y-3 bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                            <div className="flex justify-between items-center">
+                              <Label className="text-xs font-bold uppercase tracking-wider text-slate-300">{attr}</Label>
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase px-2 py-0.5 rounded-md border",
+                                  (attributes[attr] || 0) === 0 && "bg-red-950/30 border-red-500/20 text-red-400",
+                                  (attributes[attr] || 0) === 1 && "bg-red-500/10 border-red-500/20 text-red-350",
+                                  (attributes[attr] || 0) === 2 && "bg-orange-500/10 border-orange-500/20 text-orange-400",
+                                  (attributes[attr] || 0) === 3 && "bg-yellow-500/10 border-yellow-500/20 text-yellow-405",
+                                  (attributes[attr] || 0) === 4 && "bg-blue-500/10 border-blue-500/20 text-blue-400",
+                                  (attributes[attr] || 0) === 5 && "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                )}>
+                                  {getRatingLabel(attributes[attr] || 0)}
+                                </span>
+                                <span className={cn(
+                                  "text-xs font-black w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+                                  (attributes[attr] || 0) === 0 && "bg-red-700 text-white",
+                                  (attributes[attr] || 0) === 1 && "bg-red-500 text-white",
+                                  (attributes[attr] || 0) === 2 && "bg-orange-500 text-white",
+                                  (attributes[attr] || 0) === 3 && "bg-yellow-500 text-slate-950",
+                                  (attributes[attr] || 0) === 4 && "bg-blue-500 text-white",
+                                  (attributes[attr] || 0) === 5 && "bg-emerald-600 text-white"
+                                )}>
+                                  {attributes[attr] || 0}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between gap-1">
+                              {[0, 1, 2, 3, 4, 5].map((val) => (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => setAttributes(prev => ({ ...prev, [attr]: val }))}
+                                  className={cn(
+                                    "flex-1 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all border",
+                                    (attributes[attr] || 0) === val 
+                                      ? cn(
+                                          "text-white shadow-sm",
+                                          val === 0 && "bg-red-700 border-red-650",
+                                          val === 1 && "bg-red-500 border-red-400",
+                                          val === 2 && "bg-orange-500 border-orange-400",
+                                          val === 3 && "bg-yellow-500 border-yellow-400 text-slate-950",
+                                          val === 4 && "bg-blue-500 border-blue-400",
+                                          val === 5 && "bg-emerald-600 border-emerald-500"
+                                        )
+                                      : "bg-slate-900 border-slate-800 text-slate-550 hover:bg-slate-800"
+                                  )}
+                                >
+                                  {val}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              {/* Aspectos Comunes */}
+              <div>
+                <h3 className="text-sm font-black text-blue-400 uppercase tracking-widest border-b border-slate-800 pb-2 mb-6">
+                  Ítems Comunes para Todas las Posiciones
+                </h3>
+                <div className="space-y-8">
+                  {COMMON_ATTRIBUTES.map((group) => (
+                    <div key={group.category} className="space-y-4">
+                      <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-850 inline-block">
+                        {group.category}
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-x-12 gap-y-6">
+                        {group.items.map((attr) => (
+                          <div key={attr} className="space-y-3 bg-slate-950/40 p-3 rounded-xl border border-slate-850/60">
+                            <div className="flex justify-between items-center">
+                              <Label className="text-xs font-bold uppercase tracking-wider text-slate-300">{attr}</Label>
+                              <div className="flex items-center gap-2">
+                                <span className={cn(
+                                  "text-[9px] font-black uppercase px-2 py-0.5 rounded-md border",
+                                  (attributes[attr] || 0) === 0 && "bg-red-950/30 border-red-500/20 text-red-400",
+                                  (attributes[attr] || 0) === 1 && "bg-red-500/10 border-red-500/20 text-red-350",
+                                  (attributes[attr] || 0) === 2 && "bg-orange-500/10 border-orange-500/20 text-orange-400",
+                                  (attributes[attr] || 0) === 3 && "bg-yellow-500/10 border-yellow-500/20 text-yellow-405",
+                                  (attributes[attr] || 0) === 4 && "bg-blue-500/10 border-blue-500/20 text-blue-400",
+                                  (attributes[attr] || 0) === 5 && "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+                                )}>
+                                  {getRatingLabel(attributes[attr] || 0)}
+                                </span>
+                                <span className={cn(
+                                  "text-xs font-black w-6 h-6 rounded-full flex items-center justify-center transition-colors",
+                                  (attributes[attr] || 0) === 0 && "bg-red-700 text-white",
+                                  (attributes[attr] || 0) === 1 && "bg-red-500 text-white",
+                                  (attributes[attr] || 0) === 2 && "bg-orange-500 text-white",
+                                  (attributes[attr] || 0) === 3 && "bg-yellow-500 text-slate-950",
+                                  (attributes[attr] || 0) === 4 && "bg-blue-500 text-white",
+                                  (attributes[attr] || 0) === 5 && "bg-emerald-600 text-white"
+                                )}>
+                                  {attributes[attr] || 0}
+                                </span>
+                              </div>
+                            </div>
+                            <div className="flex justify-between gap-1">
+                              {[0, 1, 2, 3, 4, 5].map((val) => (
+                                <button
+                                  key={val}
+                                  type="button"
+                                  onClick={() => setAttributes(prev => ({ ...prev, [attr]: val }))}
+                                  className={cn(
+                                    "flex-1 h-8 rounded-lg flex items-center justify-center text-xs font-black transition-all border",
+                                    (attributes[attr] || 0) === val 
+                                      ? cn(
+                                          "text-white shadow-sm",
+                                          val === 0 && "bg-red-700 border-red-650",
+                                          val === 1 && "bg-red-500 border-red-400",
+                                          val === 2 && "bg-orange-500 border-orange-400",
+                                          val === 3 && "bg-yellow-500 border-yellow-400 text-slate-950",
+                                          val === 4 && "bg-blue-500 border-blue-400",
+                                          val === 5 && "bg-emerald-600 border-emerald-500"
+                                        )
+                                      : "bg-slate-900 border-slate-800 text-slate-550 hover:bg-slate-800"
+                                  )}
+                                >
+                                  {val}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

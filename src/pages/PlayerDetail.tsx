@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { supabase } from '@/lib/supabase';
-import { Player, PlayerAttribute, POSITION_ATTRIBUTES } from '@/types';
+import { Player, PlayerAttribute, POSITION_ATTRIBUTES, POSITION_STRUCTURED_ATTRIBUTES, COMMON_ATTRIBUTES } from '@/types';
 import { 
   Card, 
   CardContent, 
@@ -141,11 +141,15 @@ export default function PlayerDetail() {
   if (loading) return <div className="flex justify-center py-20 animate-pulse font-bold">CARGANDO JUGADOR...</div>;
   if (!player) return <div className="text-center py-20">Jugador no encontrado</div>;
 
-  const radarData = player.attributes?.map(attr => ({
-    subject: attr.atributo,
-    A: attr.valor,
-    fullMark: 5,
-  })) || [];
+  const positionGroups = POSITION_STRUCTURED_ATTRIBUTES[player.posicion] || [];
+  const specificAttrNames = positionGroups.flatMap(g => g.items);
+  const radarData = player.attributes
+    ?.filter(attr => specificAttrNames.includes(attr.atributo))
+    .map(attr => ({
+      subject: attr.atributo,
+      A: attr.valor,
+      fullMark: 5,
+    })) || [];
 
   return (
     <div className="max-w-6xl mx-auto space-y-6 md:space-y-8 pb-20">
@@ -253,42 +257,102 @@ export default function PlayerDetail() {
                   </RadarChart>
                 </ResponsiveContainer>
               </div>
-              <div className="w-full md:w-72 p-5 md:p-6 overflow-y-auto space-y-4 max-h-[350px]">
-                 <div className="flex justify-between items-center mb-1">
-                   <h4 className="text-xs font-bold text-slate-500 uppercase tracking-widest">Atributos Clave</h4>
-                   <div className="px-3 py-1.5 bg-blue-600/20 rounded-xl border border-blue-600/30 shadow-[0_0_20px_rgba(37,99,235,0.15)] flex items-center gap-2">
-                     <span className="text-[10px] font-bold text-blue-500/70 uppercase tracking-widest">Global</span>
-                     <span className="text-xl font-black text-blue-400 tracking-tighter">{calculateAverage(player.attributes)}</span>
+              <div className="w-full md:w-80 p-5 md:p-6 overflow-y-auto space-y-5 max-h-[350px] bg-slate-900/40">
+                 <div className="flex justify-between items-center mb-2 border-b border-slate-850 pb-2">
+                   <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest">Atributos</h4>
+                   <div className="px-2.5 py-1 bg-blue-600/20 rounded-lg border border-blue-600/30 flex items-center gap-1.5">
+                     <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest">Global</span>
+                     <span className="text-base font-black text-blue-400 tracking-tighter">{calculateAverage(player.attributes)}</span>
                    </div>
                  </div>
-                 {player.attributes?.map(attr => (
-                   <div key={attr.atributo} className="space-y-1">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-slate-400 font-bold uppercase tracking-tighter text-[10px]">{attr.atributo}</span>
-                        <span className={cn(
-                          "font-black text-xs px-2 py-0.5 rounded-md",
-                          attr.valor === 1 && "text-red-500 bg-red-500/10",
-                          attr.valor === 2 && "text-orange-500 bg-orange-500/10",
-                          attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
-                          attr.valor === 4 && "text-lime-500 bg-lime-500/10",
-                          attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
-                        )}>{attr.valor}/5</span>
-                      </div>
-                      <div className="h-1.5 bg-slate-800 rounded-full overflow-hidden">
-                        <div 
-                          className={cn(
-                            "h-full rounded-full transition-all",
-                            attr.valor === 1 && "bg-red-600",
-                            attr.valor === 2 && "bg-orange-600",
-                            attr.valor === 3 && "bg-yellow-600",
-                            attr.valor === 4 && "bg-lime-600",
-                            attr.valor === 5 && "bg-emerald-600"
-                          )} 
-                          style={{ width: `${(attr.valor / 5) * 100}%` }} 
-                        />
-                      </div>
-                   </div>
-                 ))}
+
+                 {/* Specific attributes */}
+                 <div className="space-y-4">
+                   <p className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">Específicos ({player.posicion})</p>
+                   {(POSITION_STRUCTURED_ATTRIBUTES[player.posicion] || []).map(group => {
+                     const groupAttrs = player.attributes?.filter(a => group.items.includes(a.atributo)) || [];
+                     if (groupAttrs.length === 0) return null;
+                     return (
+                       <div key={group.category} className="space-y-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850">
+                         <h5 className="text-[9px] font-bold text-slate-450 uppercase tracking-wide border-b border-slate-850/60 pb-1 mb-2">{group.category}</h5>
+                         {groupAttrs.map(attr => (
+                           <div key={attr.atributo} className="space-y-1">
+                             <div className="flex justify-between items-center text-xs">
+                               <span className="text-slate-400 font-medium text-[10px] uppercase truncate max-w-[150px]">{attr.atributo}</span>
+                               <span className={cn(
+                                 "font-black text-[9px] px-1.5 py-0.5 rounded",
+                                 attr.valor === 0 && "text-red-500 bg-red-500/10",
+                                 attr.valor === 1 && "text-red-400 bg-red-400/10",
+                                 attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                                 attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                                 attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                                 attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
+                               )}>{attr.valor}/5</span>
+                             </div>
+                             <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                               <div 
+                                 className={cn(
+                                   "h-full rounded-full transition-all",
+                                   attr.valor === 0 && "bg-red-700",
+                                   attr.valor === 1 && "bg-red-500",
+                                   attr.valor === 2 && "bg-orange-500",
+                                   attr.valor === 3 && "bg-yellow-500",
+                                   attr.valor === 4 && "bg-blue-500",
+                                   attr.valor === 5 && "bg-emerald-600"
+                                 )} 
+                                 style={{ width: `${(attr.valor / 5) * 100}%` }} 
+                               />
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     );
+                   })}
+                 </div>
+
+                 {/* Common attributes */}
+                 <div className="space-y-4 pt-2 border-t border-slate-850">
+                   <p className="text-[10px] font-black text-blue-400 uppercase tracking-wider">Comunes</p>
+                   {COMMON_ATTRIBUTES.map(group => {
+                     const groupAttrs = player.attributes?.filter(a => group.items.includes(a.atributo)) || [];
+                     if (groupAttrs.length === 0) return null;
+                     return (
+                       <div key={group.category} className="space-y-2 bg-slate-950/40 p-2.5 rounded-lg border border-slate-850">
+                         <h5 className="text-[9px] font-bold text-slate-450 uppercase tracking-wide border-b border-slate-850/60 pb-1 mb-2">{group.category}</h5>
+                         {groupAttrs.map(attr => (
+                           <div key={attr.atributo} className="space-y-1">
+                             <div className="flex justify-between items-center text-xs">
+                               <span className="text-slate-400 font-medium text-[10px] uppercase truncate max-w-[150px]">{attr.atributo}</span>
+                               <span className={cn(
+                                 "font-black text-[9px] px-1.5 py-0.5 rounded",
+                                 attr.valor === 0 && "text-red-500 bg-red-500/10",
+                                 attr.valor === 1 && "text-red-400 bg-red-400/10",
+                                 attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                                 attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                                 attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                                 attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
+                               )}>{attr.valor}/5</span>
+                             </div>
+                             <div className="h-1 bg-slate-800 rounded-full overflow-hidden">
+                               <div 
+                                 className={cn(
+                                   "h-full rounded-full transition-all",
+                                   attr.valor === 0 && "bg-red-700",
+                                   attr.valor === 1 && "bg-red-500",
+                                   attr.valor === 2 && "bg-orange-500",
+                                   attr.valor === 3 && "bg-yellow-500",
+                                   attr.valor === 4 && "bg-blue-500",
+                                   attr.valor === 5 && "bg-emerald-600"
+                                 )} 
+                                 style={{ width: `${(attr.valor / 5) * 100}%` }} 
+                               />
+                             </div>
+                           </div>
+                         ))}
+                       </div>
+                     );
+                   })}
+                 </div>
               </div>
             </CardContent>
           </Card>

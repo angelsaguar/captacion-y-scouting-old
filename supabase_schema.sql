@@ -321,3 +321,35 @@ DROP POLICY IF EXISTS "Anyone can manage match plans" ON public.match_plans;
 CREATE POLICY "Anyone can manage match plans" ON public.match_plans
     FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
 
+
+-- ==========================================================
+-- 11. CREAR TABLA DE PARTIDOS (TEAM MATCHES)
+-- ==========================================================
+CREATE TABLE IF NOT EXISTS public.team_matches (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    team TEXT NOT NULL,
+    rival TEXT NOT NULL,
+    fecha DATE NOT NULL,
+    hora TEXT NOT NULL,
+    tipo TEXT NOT NULL, -- 'Local' | 'Visitante'
+    competicion TEXT NOT NULL, -- 'Liga' | 'Copa' | 'Amistoso'
+    estado TEXT NOT NULL, -- 'Programado' | 'Finalizado'
+    goles_favor INTEGER,
+    goles_contra INTEGER,
+    acta TEXT,
+    estadisticas JSONB NOT NULL DEFAULT '{}'::jsonb,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Habilitar RLS para partidos
+ALTER TABLE public.team_matches ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS "Anyone can view team matches" ON public.team_matches;
+CREATE POLICY "Anyone can view team matches" ON public.team_matches
+    FOR SELECT USING (true);
+
+DROP POLICY IF EXISTS "Anyone can manage team matches" ON public.team_matches;
+CREATE POLICY "Anyone can manage team matches" ON public.team_matches
+    FOR ALL TO anon, authenticated USING (true) WITH CHECK (true);
+
+

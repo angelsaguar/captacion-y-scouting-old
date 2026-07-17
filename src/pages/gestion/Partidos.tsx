@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { supabase } from '@/lib/supabase';
 import { CLUB_TEAMS } from '@/types';
 import { 
   Trophy, 
@@ -30,6 +31,7 @@ interface MatchPlayerStat {
   tarjetas_rojas: number;
   goles_metidos: number;
   goles_encajados: number;
+  asistencias?: number;
 }
 
 interface Substitution {
@@ -90,19 +92,56 @@ export default function Partidos() {
       setPlayers([]);
     }
 
-    const key = `team_matches_${selectedTeam}`;
-    const saved = localStorage.getItem(key);
-    if (saved) {
-      setMatches(JSON.parse(saved));
-    } else {
-      // Default placeholder games
-      const defaults: Match[] = [
-        { id: 'm1', rival: 'A.D. Arganda', fecha: new Date().toISOString().split('T')[0], hora: '12:00', tipo: 'Local', competicion: 'Liga', estado: 'Programado' },
-        { id: 'm2', rival: 'F.C. Rivas Vaciamadrid', fecha: '2026-05-15', hora: '11:30', tipo: 'Visitante', competicion: 'Liga', estado: 'Finalizado', goles_favor: 3, goles_contra: 1, acta: 'Excelente partido de posesión y presión alta. Destacó el juego defensivo por bandas.' }
-      ];
-      localStorage.setItem(key, JSON.stringify(defaults));
-      setMatches(defaults);
-    }
+    const fetchMatches = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('team_matches')
+          .select('*')
+          .eq('team', selectedTeam)
+          .order('fecha', { ascending: false });
+
+        if (!error && data) {
+          const formatted: Match[] = data.map(item => ({
+            id: item.id,
+            rival: item.rival,
+            fecha: item.fecha,
+            hora: item.hora,
+            tipo: item.tipo as any,
+            competicion: item.competicion as any,
+            estado: item.estado as any,
+            goles_favor: item.goles_favor !== null ? item.goles_favor : undefined,
+            goles_contra: item.goles_contra !== null ? item.goles_contra : undefined,
+            acta: item.acta || undefined,
+            estadisticas: item.estadisticas || undefined
+          }));
+          
+          setMatches(formatted);
+          localStorage.setItem(`team_matches_${selectedTeam}`, JSON.stringify(formatted));
+          return;
+        } else if (error) {
+          console.warn('Error fetching matches from Supabase, using local fallback:', error);
+        }
+      } catch (err) {
+        console.warn('Exception fetching matches from Supabase:', err);
+      }
+
+      // Local fallback
+      const key = `team_matches_${selectedTeam}`;
+      const saved = localStorage.getItem(key);
+      if (saved) {
+        setMatches(JSON.parse(saved));
+      } else {
+        // Default placeholder games
+        const defaults: Match[] = [
+          { id: 'm1', rival: 'A.D. Arganda', fecha: new Date().toISOString().split('T')[0], hora: '12:00', tipo: 'Local', competicion: 'Liga', estado: 'Programado' },
+          { id: 'm2', rival: 'F.C. Rivas Vaciamadrid', fecha: '2026-05-15', hora: '11:30', tipo: 'Visitante', competicion: 'Liga', estado: 'Finalizado', goles_favor: 3, goles_contra: 1, acta: 'Excelente partido de posesión y presión alta. Destacó el juego defensivo por bandas.' }
+        ];
+        localStorage.setItem(key, JSON.stringify(defaults));
+        setMatches(defaults);
+      }
+    };
+
+    fetchMatches();
   }, [selectedTeam]);
 
   // Sync modal form states when showActaModal is opened/selected
@@ -124,7 +163,8 @@ export default function Partidos() {
           tarjetas_amarillas: saved ? saved.tarjetas_amarillas : 0,
           tarjetas_rojas: saved ? saved.tarjetas_rojas : 0,
           goles_metidos: saved ? saved.goles_metidos : 0,
-          goles_encajados: saved ? saved.goles_encajados : 0
+          goles_encajados: saved ? saved.goles_encajados : 0,
+          asistencias: saved ? (saved.asistencias || 0) : 0
         };
       });
 
@@ -136,9 +176,50 @@ export default function Partidos() {
     }
   }, [showActaModal, players]);
 
-  const saveMatches = (updated: Match[]) => {
+  const saveMatches = async (updated: Match[]) => {
     setMatches(updated);
     localStorage.setItem(`team_matches_${selectedTeam}`, JSON.stringify(updated));
+
+    // Try to sync to Supabase in the background
+    try {
+      for (const match of updated) {
+        const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(match.id);
+        const payload = {
+          team: selectedTeam,
+          rival: match.rival,
+          fecha: match.fecha,
+          hora: match.hora,
+          tipo: match.tipo,
+          competicion: match.competicion,
+          estado: match.estado,
+          goles_favor: match.goles_favor ?? null,
+          goles_contra: match.goles_contra ?? null,
+          acta: match.acta ?? null,
+          estadisticas: match.estadisticas || {}
+        };
+
+        if (isUuid) {
+          await supabase
+            .from('team_matches')
+            .upsert({ id: match.id, ...payload });
+        } else {
+          // If it's a temporary ID, insert it and let Supabase assign a real UUID
+          const { data, error } = await supabase
+            .from('team_matches')
+            .insert({ ...payload })
+            .select();
+
+          if (!error && data && data[0]) {
+            // Update the temporary ID in state and local storage with the new UUID
+            match.id = data[0].id;
+            setMatches([...updated]);
+            localStorage.setItem(`team_matches_${selectedTeam}`, JSON.stringify(updated));
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('Failed to sync team matches to Supabase:', err);
+    }
   };
 
   const handleAddMatch = (e: React.FormEvent) => {
@@ -180,10 +261,23 @@ export default function Partidos() {
     setShowAddForm(false);
   };
 
-  const handleDeleteMatch = (id: string, rival: string) => {
+  const handleDeleteMatch = async (id: string, rival: string) => {
     if (confirm(`¿Estás seguro de eliminar el partido contra ${rival}?`)) {
       const updated = matches.filter(m => m.id !== id);
       saveMatches(updated);
+
+      const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(id);
+      if (isUuid) {
+        try {
+          await supabase
+            .from('team_matches')
+            .delete()
+            .eq('id', id);
+        } catch (err) {
+          console.warn('Failed to delete match from Supabase:', err);
+        }
+      }
+
       toast.success('Partido eliminado del calendario.');
     }
   };
@@ -702,11 +796,12 @@ export default function Partidos() {
                     <div className="space-y-2 max-h-[500px] overflow-y-auto pr-1">
                       {/* Grid Header */}
                       <div className="grid grid-cols-12 gap-1 px-2 py-1.5 text-[9px] font-black uppercase text-slate-500 tracking-wider">
-                        <div className="col-span-4">Jugadora</div>
+                        <div className="col-span-3">Jugadora</div>
                         <div className="col-span-1 text-center" title="Titular">TIT</div>
                         <div className="col-span-1 text-center" title="Suplente">SUP</div>
                         <div className="col-span-2 text-center" title="Minutos Jugados">MIN</div>
                         <div className="col-span-1 text-center" title="Goles Marcados">GOL</div>
+                        <div className="col-span-1 text-center" title="Asistencias">ASI</div>
                         <div className="col-span-1 text-center" title="Goles Encajados (Portera)">ENC</div>
                         <div className="col-span-1 text-center" title="Tarjetas Amarillas">TA</div>
                         <div className="col-span-1 text-center" title="Tarjetas Rojas">TR</div>
@@ -724,7 +819,7 @@ export default function Partidos() {
                                 : 'bg-slate-950/60 border-slate-850 hover:border-slate-800'
                           }`}
                         >
-                          <div className="col-span-4 flex items-center gap-2 truncate">
+                          <div className="col-span-3 flex items-center gap-2 truncate">
                             <span className="w-5 h-5 bg-slate-900 border border-slate-800 rounded-full flex items-center justify-center font-black text-[9px] text-slate-300 shrink-0">
                               {stat.dorsal}
                             </span>
@@ -790,6 +885,21 @@ export default function Partidos() {
                                 ));
                               }}
                               className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 text-center font-bold text-emerald-400 text-xs"
+                            />
+                          </div>
+
+                          <div className="col-span-1 px-0.5">
+                            <input 
+                              type="number"
+                              min="0"
+                              value={stat.asistencias || 0}
+                              onChange={(e) => {
+                                const val = parseInt(e.target.value) || 0;
+                                setMatchPlayerStats(prev => prev.map((s, i) => 
+                                  i === idx ? { ...s, asistencias: val } : s
+                                ));
+                              }}
+                              className="w-full bg-slate-950 border border-slate-800 rounded-lg py-1 text-center font-bold text-sky-450 text-xs"
                             />
                           </div>
 

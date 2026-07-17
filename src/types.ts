@@ -96,13 +96,80 @@ export const CLUB_TEAMS = [
   'PREBENJAMIN B'
 ];
 
-export const POSITION_ATTRIBUTES: Record<string, string[]> = {
-  PORTERO: ['Reflejos', 'Juego aéreo', '1 contra 1', 'Juego con los pies', 'Colocación', 'Comunicación y liderazgo'],
-  CENTRAL: ['Posicionamiento', 'Duelo defensivo', 'Juego aéreo', 'Salida de balón', 'Concentración', 'Velocidad correctiva'],
-  LATERAL: ['Resistencia física', 'Capacidad ofensiva', 'Defensa en espacios abiertos', 'Velocidad', 'Lectura táctica'],
-  'MEDIO CENTRO DEFENSIVO': ['Lectura táctica', 'Posicionamiento', 'Recuperación y anticipación', 'Primer pase', 'Control del ritmo', 'Disciplina táctica'],
-  INTERIOR: ['Capacidad física ida y vuelta', 'Conducción progresiva', 'Creatividad', 'Presión y trabajo defensivo', 'Inteligencia espacial'],
-  'MEDIA PUNTA': ['Creatividad', 'Último pase', 'Recepción entre líneas', 'Regate corto', 'Visión de juego', 'Amenaza ofensiva propia'],
-  EXTREMO: ['Desequilibrio individual', 'Velocidad explosiva', 'Producción ofensiva', 'Toma de decisiones', 'Movimientos sin balón', 'Presión tras pérdida'],
-  DELANTERO: ['Definición', 'Desmarque', 'Instinto goleador', 'Juego de espaldas', 'Movilidad', 'Mentalidad competitiva'],
+export interface AttributeGroup {
+  category: string;
+  items: string[];
+}
+
+export const POSITION_STRUCTURED_ATTRIBUTES: Record<string, AttributeGroup[]> = {
+  PORTERO: [
+    { category: 'Aspecto técnico', items: ['Blocaje', 'Desvíos', 'Juego aéreo', 'Uno contra uno', 'Reflejos', 'Paradas de media/larga distancia', 'Juego con los pies', 'Pase corto', 'Pase largo', 'Saque con mano', 'Saque con pie'] },
+    { category: 'Aspecto táctico', items: ['Colocación', 'Lectura del juego', 'Cobertura de espacios', 'Anticipación', 'Comunicación con la defensa'] },
+    { category: 'Aspecto físico', items: ['Agilidad', 'Explosividad', 'Velocidad de reacción', 'Fuerza', 'Coordinación'] },
+    { category: 'Aspecto mental', items: ['Concentración', 'Personalidad', 'Toma de decisiones', 'Liderazgo', 'Gestión de la presión'] }
+  ],
+  CENTRAL: [
+    { category: 'Defensa', items: ['Marcaje', 'Anticipación', 'Entradas', 'Timing defensivo', 'Interceptaciones', 'Coberturas', 'Duelos aéreos', 'Duelos terrestres'] },
+    { category: 'Construcción', items: ['Primer pase', 'Pase medio', 'Pase largo', 'Cambio de orientación', 'Conducción', 'Salida de balón bajo presión'] },
+    { category: 'Táctica', items: ['Posicionamiento', 'Coordinación de la línea defensiva', 'Lectura del juego', 'Defensa del área'] },
+    { category: 'Físico', items: ['Velocidad', 'Potencia', 'Fuerza', 'Resistencia'] },
+    { category: 'Mental', items: ['Concentración', 'Liderazgo', 'Agresividad competitiva', 'Calma con balón'] }
+  ],
+  LATERAL: [
+    { category: 'Defensa', items: ['1 vs 1 defensivo', 'Entradas', 'Anticipación', 'Coberturas', 'Defensa del segundo palo'] },
+    { category: 'Ataque', items: ['Incorporación ofensiva', 'Centros', 'Pase', 'Conducción', 'Regate', 'Asociación'] },
+    { category: 'Táctica', items: ['Ocupación de espacios', 'Temporización', 'Lectura ofensiva', 'Lectura defensiva'] },
+    { category: 'Físico', items: ['Velocidad', 'Resistencia', 'Aceleración', 'Capacidad de repetir esfuerzos'] },
+    { category: 'Mental', items: ['Intensidad', 'Competitividad', 'Concentración'] }
+  ],
+  'MEDIO CENTRO DEFENSIVO': [
+    { category: 'Defensa', items: ['Recuperación', 'Interceptaciones', 'Duelos', 'Coberturas', 'Presión tras pérdida'] },
+    { category: 'Organización', items: ['Primer pase', 'Cambios de orientación', 'Juego entre líneas', 'Ritmo del juego', 'Conservación del balón'] },
+    { category: 'Táctica', items: ['Posicionamiento', 'Lectura del juego', 'Equilibrio del equipo', 'Ayudas defensivas'] },
+    { category: 'Físico', items: ['Resistencia', 'Fuerza', 'Movilidad'] },
+    { category: 'Mental', items: ['Toma de decisiones', 'Inteligencia táctica', 'Personalidad', 'Serenidad'] }
+  ],
+  INTERIOR: [
+    { category: 'Ataque', items: ['Pase', 'Pase filtrado', 'Conducción', 'Regate', 'Llegada al área', 'Disparo'] },
+    { category: 'Defensa', items: ['Presión', 'Recuperación', 'Ayudas'] },
+    { category: 'Táctica', items: ['Movilidad', 'Ocupación de espacios', 'Juego entre líneas', 'Interpretación del juego'] },
+    { category: 'Físico', items: ['Resistencia', 'Dinamismo', 'Intensidad'] },
+    { category: 'Mental', items: ['Creatividad', 'Decisión', 'Competitividad'] }
+  ],
+  'MEDIA PUNTA': [
+    { category: 'Creatividad', items: ['Último pase', 'Visión', 'Juego entre líneas', 'Asociación', 'Regate'] },
+    { category: 'Finalización', items: ['Disparo', 'Definición', 'Llegada al área'] },
+    { category: 'Táctica', items: ['Movimientos entre líneas', 'Recepción orientada', 'Lectura ofensiva'] },
+    { category: 'Físico', items: ['Agilidad', 'Cambios de ritmo'] },
+    { category: 'Mental', items: ['Imaginación', 'Toma de decisiones', 'Personalidad'] }
+  ],
+  EXTREMO: [
+    { category: 'Desequilibrio', items: ['Regate', 'Uno contra uno', 'Cambios de ritmo', 'Velocidad'] },
+    { category: 'Producción ofensiva', items: ['Centro', 'Pase atrás', 'Asistencia'] },
+    { category: 'Definición', items: ['Disparo'] },
+    { category: 'Táctica', items: ['Desmarques', 'Ataque al espacio', 'Amplitud', 'Juego interior'] },
+    { category: 'Defensa', items: ['Repliegue', 'Presión'] },
+    { category: 'Mental', items: ['Atrevimiento', 'Confianza', 'Capacidad competitiva'] }
+  ],
+  DELANTERO: [
+    { category: 'Finalización', items: ['Definición', 'Remate de cabeza', 'Remate con ambas piernas', 'Uno contra uno con el portero', 'Primer toque'] },
+    { category: 'Juego ofensivo', items: ['Desmarques', 'Ataque del espacio', 'Juego de espaldas', 'Descargas', 'Protección del balón'] },
+    { category: 'Táctica', items: ['Movilidad', 'Lectura del área', 'Ocupación de espacios'] },
+    { category: 'Físico', items: ['Potencia', 'Velocidad', 'Salto'] },
+    { category: 'Mental', items: ['Instinto goleador', 'Ambición', 'Sangre fría', 'Competitividad'] }
+  ]
 };
+
+export const COMMON_ATTRIBUTES: AttributeGroup[] = [
+  { category: 'Técnica', items: ['Control orientado', 'Calidad del pase', 'Dominio de ambas piernas', 'Primer toque'] },
+  { category: 'Táctica', items: ['Comprensión del juego', 'Posicionamiento', 'Adaptación a diferentes sistemas', 'Transiciones ofensivas', 'Transiciones defensivas'] },
+  { category: 'Física', items: ['Velocidad', 'Aceleración', 'Resistencia', 'Fuerza', 'Coordinación', 'Equilibrio'] },
+  { category: 'Mental', items: ['Concentración', 'Personalidad', 'Toma de decisiones', 'Comunicación', 'Liderazgo', 'Resiliencia', 'Actitud competitiva', 'Inteligencia táctica'] }
+];
+
+export const POSITION_ATTRIBUTES: Record<string, string[]> = {};
+Object.entries(POSITION_STRUCTURED_ATTRIBUTES).forEach(([pos, groups]) => {
+  const specific = groups.flatMap(g => g.items);
+  const common = COMMON_ATTRIBUTES.flatMap(g => g.items);
+  POSITION_ATTRIBUTES[pos] = Array.from(new Set([...specific, ...common]));
+});

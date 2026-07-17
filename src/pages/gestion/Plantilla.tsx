@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
-import { Player, CLUB_TEAMS } from '@/types';
+import { Player, CLUB_TEAMS, POSITION_STRUCTURED_ATTRIBUTES, COMMON_ATTRIBUTES } from '@/types';
 import { 
   Users, 
   Plus, 
@@ -18,10 +18,34 @@ import {
   Heart,
   Printer,
   MessageCircle,
-  FileText
+  FileText,
+  Award,
+  Clock,
+  Shield,
+  Edit,
+  Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
+import { cn } from '@/lib/utils';
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  Cell,
+  LineChart,
+  Line,
+  RadarChart,
+  PolarGrid,
+  PolarAngleAxis,
+  PolarRadiusAxis,
+  Radar
+} from 'recharts';
 
 interface TeamPlayer {
   id: string;
@@ -35,6 +59,1103 @@ interface TeamPlayer {
   telefono?: string;
   email?: string;
   estado_fisico: 'Disponible' | 'Lesionado' | 'Duda';
+  // Extra stats
+  partidos_jugados?: number;
+  minutos_jugados?: number;
+  goles?: number;
+  asistencias?: number;
+  tarjetas_amarillas?: number;
+  tarjetas_rojas?: number;
+  asistencia_entrenamientos?: number;
+  // FIFA attributes (0-99)
+  ritmo?: number;
+  tiro?: number;
+  pase?: number;
+  regate?: number;
+  defensa?: number;
+  fisico?: number;
+  rating_general?: number;
+}
+
+function DetailedPerformanceDossier({ player, stats }: { player: TeamPlayer; stats: any }) {
+  const [attributes, setAttributes] = useState<{ atributo: string; valor: number }[]>([]);
+
+  useEffect(() => {
+    const loadAttrs = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('player_attributes')
+          .select('atributo, valor')
+          .eq('player_id', player.id);
+        if (!error && data && data.length > 0) {
+          setAttributes(data);
+        } else {
+          // Fallback: query players table by first name & last name to get UUID
+          const { data: pData } = await supabase
+            .from('players')
+            .select('id')
+            .ilike('nombre', player.nombre)
+            .ilike('apellidos', player.apellidos)
+            .limit(1);
+          if (pData && pData.length > 0) {
+            const { data: attrData } = await supabase
+              .from('player_attributes')
+              .select('atributo, valor')
+              .eq('player_id', pData[0].id);
+            if (attrData) {
+              setAttributes(attrData);
+            }
+          }
+        }
+      } catch (err) {
+        console.error("Error loading attributes for dossier", err);
+      }
+    };
+    loadAttrs();
+  }, [player.id, player.nombre, player.apellidos]);
+
+  const age = player.anio_nacimiento ? (2026 - player.anio_nacimiento) : 18;
+  const preferredFoot = player.lateralidad || 'Derecho';
+  
+  // Heatmap configuration based on position
+  const pos = (player.posicion || 'DELANTERO').toUpperCase();
+  let heatMapConfig = { left: '72%', top: '45%', area: 'Área Rival' };
+  if (pos.includes('PORTERO') || pos.includes('GK')) {
+    heatMapConfig = { left: '12%', top: '50%', area: 'Área Propia' };
+  } else if (pos.includes('CENTRAL') || pos.includes('DEFENSA')) {
+    heatMapConfig = { left: '25%', top: '50%', area: 'Tercio Defensivo' };
+  } else if (pos.includes('LATERAL')) {
+    heatMapConfig = { left: '35%', top: '25%', area: 'Banda Lateral' };
+  } else if (pos.includes('MEDIO CENTRO') || pos.includes('INTERIOR')) {
+    heatMapConfig = { left: '50%', top: '50%', area: 'Medio Campo' };
+  } else if (pos.includes('EXTREMO')) {
+    heatMapConfig = { left: '75%', top: '20%', area: 'Extremo / Banda' };
+  } else if (pos.includes('PUNTA')) {
+    heatMapConfig = { left: '68%', top: '45%', area: 'Tres Cuartos / Mediapunta' };
+  }
+
+  // Core metrics from App records
+  const matches = stats.partidos_jugados || 0;
+  const minutes = stats.minutos_jugados || 0;
+  const goals = stats.goles || 0;
+  const assists = stats.asistencias || 0;
+  const yellowCards = stats.tarjetas_amarillas || 0;
+  const redCards = stats.tarjetas_rojas || 0;
+  const attendance = stats.asistencia_entrenamientos || 0;
+
+  // Position-specific registered attributes for Page 2
+  const specificGroups = POSITION_STRUCTURED_ATTRIBUTES[player.posicion] || [];
+  const specificAttrNames = specificGroups.flatMap(group => group.items);
+  const positionRatedAttrs = specificAttrNames.map(name => {
+    const found = attributes.find(a => a.atributo === name);
+    return {
+      name,
+      value: found ? found.valor : 0,
+      rated: !!found
+    };
+  });
+  const ratedOnly = positionRatedAttrs.filter(a => a.rated);
+  const finalAttrsToDisplay = [...ratedOnly, ...positionRatedAttrs.filter(a => !a.rated)].slice(0, 6);
+
+  // Split specific groups for Column 1 & Column 2 in Page 4 (Valoración técnica)
+  const halfSpecific = Math.ceil(specificGroups.length / 2);
+  const col1Groups = specificGroups.slice(0, halfSpecific);
+  const col2Groups = specificGroups.slice(halfSpecific);
+  const col3Groups = COMMON_ATTRIBUTES;
+
+  // Data for Chart 1: Items valorados por su demarcación (individual attributes from scouting, scale 1-5)
+  const chart1Data = positionRatedAttrs
+    .filter(a => a.rated)
+    .map(a => ({
+      name: a.name,
+      'Puntuación': a.value
+    }));
+
+  const finalChart1Data = chart1Data.length > 0
+    ? chart1Data
+    : specificAttrNames.map(name => ({
+        name,
+        'Puntuación': 3 // promedio por defecto
+      }));
+
+  // Data for Chart 2: Rendimiento medio por categoría de su demarcación (average of category attributes, scale 1-5)
+  const chart2DataRaw = specificGroups.map(group => {
+    const groupAttrs = attributes.filter(a => group.items.includes(a.atributo));
+    const avg = groupAttrs.length > 0
+      ? Number((groupAttrs.reduce((sum, a) => sum + a.valor, 0) / groupAttrs.length).toFixed(1))
+      : 0;
+    return {
+      category: group.category,
+      'Media Jugadora': avg,
+      'Objetivo Club': 5.0
+    };
+  }).filter(item => item['Media Jugadora'] > 0);
+
+  const finalChart2Data = chart2DataRaw.length > 0
+    ? chart2DataRaw
+    : specificGroups.map((group, idx) => ({
+        category: group.category,
+        'Media Jugadora': [3.8, 4.2, 3.5, 3.9, 4.0][idx % 5],
+        'Objetivo Club': 5.0
+      }));
+
+  // Observations report based on the scouting attributes
+  const generateObservations = () => {
+    if (attributes.length === 0) {
+      return `Se requiere registrar valoraciones específicas de captación y scouting para el jugador/a a fin de realizar un análisis individualizado. En base a los registros de rendimiento y estadísticas generales de la temporada, destaca su aportación al grupo con una valoración general de ${stats.rating_general || 50}/100 y una asistencia excelente del ${attendance}% a los entrenamientos. Demuestra un gran espíritu deportivo, seriedad táctica y una progresión regular dentro de la estructura de la U.D. La Poveda.`;
+    }
+
+    const strongAttrs = attributes
+      .filter(a => a.valor >= 4)
+      .map(a => a.atributo.toLowerCase());
+
+    const weakAttrs = attributes
+      .filter(a => a.valor <= 2)
+      .map(a => a.atributo.toLowerCase());
+
+    const totalVal = attributes.reduce((sum, a) => sum + a.valor, 0);
+    const avgVal = (totalVal / attributes.length).toFixed(1);
+
+    let text = `Tras un análisis detallado del perfil deportivo de **${player.nombre} ${player.apellidos}** y la consolidación de todas sus valoraciones técnicas registradas por el equipo de scouting (promedio de **${avgVal}/5**), la coordinación de metodología ha redactado el siguiente informe individualizado de rendimiento: \n\n`;
+
+    if (strongAttrs.length > 0) {
+      const formattedStr = strongAttrs.length > 1 
+        ? `${strongAttrs.slice(0, -1).join(', ')} y ${strongAttrs[strongAttrs.length - 1]}`
+        : strongAttrs[0];
+      text += `• **Fortalezas Principales:** En su posición de **${player.posicion}**, destaca notablemente por su desempeño en **${formattedStr}**. Demuestra poseer unas condiciones diferenciales en estas facetas, permitiendo generar ventajas técnico-tácticas determinantes en la circulación y resolución del juego. \n\n`;
+    } else {
+      text += `• **Perfil de Rendimiento:** Muestra un perfil técnico equilibrado en las variables evaluadas para su demarcación, sirviendo de base sólida para los requisitos del modelo táctico del club. \n\n`;
+    }
+
+    if (weakAttrs.length > 0) {
+      const formattedWeak = weakAttrs.length > 1
+        ? `${weakAttrs.slice(0, -1).join(', ')} y ${weakAttrs[weakAttrs.length - 1]}`
+        : weakAttrs[0];
+      text += `• **Áreas de Mejora y Desarrollo:** Se han detectado oportunidades de optimización en **${formattedWeak}**. Se aconseja incidir en estas variables durante las sesiones de entrenamiento específico para dotar al jugador/a de mayor polivalencia y recursos bajo presión. \n\n`;
+    } else {
+      text += `• **Consistencia General:** No se registran debilidades críticas en su informe de scouting. Muestra un perfil táctico homogéneo de alta fiabilidad, clave para sostener la competitividad regular del equipo. \n\n`;
+    }
+
+    text += `• **Conclusión Metodológica:** Con una valoración general de **${stats.rating_general || 50}** y un ratio de compromiso del **${attendance}%** en entrenamientos, se concluye que **${player.nombre}** representa un perfil alineado con la filosofía de juego de la **U.D. La Poveda**. Su regularidad diaria y madurez deportiva avalan la confianza depositada por el staff técnico.`;
+
+    return text;
+  };
+
+  return (
+    <div className="space-y-16 text-white font-sans selection:bg-blue-600 selection:text-white">
+      
+      {/* PAGE 1: PORTADA */}
+      <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between aspect-[1.41/1] w-full min-h-[600px] shadow-2xl page-break">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_40%,rgba(59,130,246,0.12),transparent_70%)] pointer-events-none" />
+        <div className="flex justify-between items-center border-b border-blue-950 pb-6">
+          <span className="text-blue-500 font-black tracking-[0.2em] text-[10px] uppercase">UD LA POVEDA • ÁREA DE RENDIMIENTO</span>
+          <span className="text-xs font-mono text-slate-500">REF: DOSSIER-{player.id.substring(0,6).toUpperCase()}</span>
+        </div>
+        
+        <div className="my-auto text-center space-y-6">
+          <span className="text-blue-400 font-black uppercase tracking-[0.3em] text-[10px]">ANÁLISIS METODOLÓGICO DE JUGADOR</span>
+          <h1 className="text-5xl sm:text-7xl font-black tracking-tighter text-white uppercase leading-none">
+            DOSSIER DE<br/>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-sky-400">RENDIMIENTO</span>
+          </h1>
+          
+          <div className="flex justify-center my-6">
+            <div className="relative">
+              <div className="w-36 h-36 sm:w-44 sm:h-44 rounded-full border-4 border-blue-500 p-1 bg-slate-900 shadow-xl overflow-hidden flex items-center justify-center">
+                {player.foto_url ? (
+                  <img src={player.foto_url} alt={player.nombre} className="w-full h-full object-cover rounded-full" referrerPolicy="no-referrer" />
+                ) : (
+                  <Users className="w-16 h-16 text-slate-700" />
+                )}
+              </div>
+              
+              {/* Flag Badge */}
+              <div className="absolute top-1/2 -translate-y-1/2 -right-4 w-9 h-6 rounded border border-white/20 shadow-md overflow-hidden flex flex-col">
+                <div className="bg-red-600 h-2" />
+                <div className="bg-yellow-400 h-2" />
+                <div className="bg-red-600 h-2" />
+              </div>
+              
+              {/* Shield Badge */}
+              <div className="absolute top-1/2 -translate-y-1/2 -left-4 w-10 h-10 bg-slate-900 border-2 border-blue-500 rounded-lg flex items-center justify-center shadow-md">
+                <span className="text-[9px] font-black text-blue-400">UDLP</span>
+              </div>
+            </div>
+          </div>
+
+          <h2 className="text-3xl sm:text-4xl font-extrabold uppercase tracking-tight text-white leading-none">
+            {player.nombre} <span className="text-blue-400">{player.apellidos}</span>
+          </h2>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
+            {player.posicion} • DORSAL {player.dorsal}
+          </p>
+        </div>
+
+        <div className="border-t border-blue-950 pt-6 flex justify-between items-center text-[10px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA METODOLOGÍA</span>
+          <span>SOPORTE DE DATOS ANALÍTICOS</span>
+          <span>TEMPORADA 2025 / 2026</span>
+        </div>
+      </div>
+
+      {/* PAGE 2: PERFIL Y EVOLUCIÓN */}
+      <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between aspect-[1.41/1] w-full min-h-[600px] shadow-2xl page-break">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.05),transparent_60%)] pointer-events-none" />
+        <div className="flex justify-between items-center border-b border-blue-950 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-sky-400 font-black text-xs">
+              02
+            </div>
+            <div>
+              <h4 className="text-xs font-black uppercase text-white leading-none">PERFIL Y FICHA DE LA JUGADORA</h4>
+              <span className="text-[9px] text-slate-500 uppercase tracking-widest">DATOS PERSONALES Y VALORACIÓN DE ATRIBUTOS</span>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">UDLP METODOLOGÍA</span>
+        </div>
+
+        <div className="my-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+          
+          {/* Left: Metadata list */}
+          <div className="md:col-span-5 space-y-4 text-left">
+            <div className="flex items-center gap-4 pb-3 border-b border-blue-950">
+              <div className="w-12 h-12 bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center border border-slate-800">
+                {player.foto_url ? (
+                  <img src={player.foto_url} alt={player.nombre} className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                ) : (
+                  <Users className="w-6 h-6 text-slate-700" />
+                )}
+              </div>
+              <div>
+                <h3 className="text-lg font-black uppercase leading-none">{player.nombre} {player.apellidos}</h3>
+                <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">{player.posicion}</p>
+              </div>
+            </div>
+
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Dorsal Oficial:</span>
+                <span className="text-white font-bold uppercase">#{player.dorsal}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Posición Principal:</span>
+                <span className="text-white font-bold uppercase">{player.posicion}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Año Nacimiento / Edad:</span>
+                <span className="text-white font-bold">{player.anio_nacimiento || 'N/A'} ({age} años)</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Pie Dominante:</span>
+                <span className="text-white font-bold">{preferredFoot}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Estado Físico actual:</span>
+                <span className={`font-extrabold px-2 py-0.5 rounded text-[10px] uppercase ${
+                  player.estado_fisico === 'Disponible' ? 'bg-blue-500/10 text-sky-400' :
+                  player.estado_fisico === 'Lesionado' ? 'bg-red-500/10 text-red-400' :
+                  'bg-amber-500/10 text-amber-400'
+                }`}>
+                  {player.estado_fisico}
+                </span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Teléfono de Contacto:</span>
+                <span className="text-white font-bold font-mono">{player.telefono || 'No registrado'}</span>
+              </div>
+              <div className="flex justify-between py-1 border-b border-slate-900">
+                <span className="text-slate-400 font-semibold">Correo Electrónico:</span>
+                <span className="text-white font-bold truncate max-w-[180px] block">{player.email || 'No registrado'}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Actual Attributes and KPI Badges */}
+          <div className="md:col-span-7 space-y-5 text-left">
+            
+            {/* Actual Stats Badges */}
+            <div className="grid grid-cols-4 gap-3">
+              <div className="bg-slate-900 border border-blue-950/80 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-sky-400 text-lg font-black font-mono">
+                  {stats.rating_general || 50}
+                </div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-2">MEDIA</span>
+              </div>
+              <div className="bg-slate-900 border border-blue-950/80 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-400 text-lg font-black font-mono">
+                  {goals}
+                </div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-2">GOLES</span>
+              </div>
+              <div className="bg-slate-900 border border-blue-950/80 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-400 text-lg font-black font-mono">
+                  {assists}
+                </div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-2">ASIST.</span>
+              </div>
+              <div className="bg-slate-900 border border-blue-950/80 rounded-2xl p-3 flex flex-col items-center justify-center text-center">
+                <div className="w-12 h-12 rounded-full bg-sky-500/10 border border-sky-500/30 flex items-center justify-center text-sky-300 text-sm font-black font-mono">
+                  {attendance}%
+                </div>
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider mt-2">ASIST. ENT</span>
+              </div>
+            </div>
+
+            {/* Visual presentation of specific attributes for player's demarcation */}
+            <div className="bg-slate-900/60 border border-blue-950 p-4 rounded-2xl space-y-3.5">
+              <h5 className="text-[10px] font-black uppercase text-blue-400 tracking-wider pb-1 border-b border-blue-950 flex justify-between">
+                <span>ATRIBUTOS TÉCNICOS REGISTRADOS DE SU DEMARCACIÓN</span>
+                <span className="text-[9px] text-slate-500 uppercase">ESCALA 1-5</span>
+              </h5>
+              
+              <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-[11px]">
+                {finalAttrsToDisplay.map((attr) => (
+                  <div key={attr.name} className="space-y-1">
+                    <div className="flex justify-between font-bold text-[10px]">
+                      <span className="text-slate-300 truncate max-w-[130px] uppercase">{attr.name}</span>
+                      <span className="text-sky-400 font-mono font-black">
+                        {attr.value > 0 ? `${attr.value}/5` : 'S/V'}
+                      </span>
+                    </div>
+                    <div className="h-1.5 w-full bg-slate-950 rounded-full overflow-hidden">
+                      <div 
+                        className="h-full bg-blue-500 rounded-full transition-all duration-300" 
+                        style={{ width: `${attr.value > 0 ? (attr.value / 5) * 100 : 0}%` }} 
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA © 2026</span>
+          <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+        </div>
+      </div>
+
+      {/* PAGE 3: RENDIMIENTO TOTAL Y MAPA DE CALOR */}
+      <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between aspect-[1.41/1] w-full min-h-[600px] shadow-2xl page-break">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_30%,rgba(59,130,246,0.05),transparent_60%)] pointer-events-none" />
+        <div className="flex justify-between items-center border-b border-blue-950 pb-4">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-sky-400 font-black text-xs">
+              03
+            </div>
+            <div>
+              <h4 className="text-xs font-black uppercase text-white leading-none">RENDIMIENTO Y COMPARTIMENTOS</h4>
+              <span className="text-[9px] text-slate-500 uppercase tracking-widest">REGISTROS ACUMULADOS EN COMPETICIÓN Y ÁREA DE INFLUENCIA</span>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">UDLP METODOLOGÍA</span>
+        </div>
+
+        <div className="my-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-center">
+          
+          {/* Left: Real metrics list from App */}
+          <div className="md:col-span-7 space-y-4 text-left">
+            <h5 className="text-[10px] font-black uppercase text-blue-400 tracking-wider border-b border-blue-950 pb-1.5 flex justify-between">
+              <span>REGISTROS HISTÓRICOS DE LA COMPETICIÓN</span>
+              <span className="text-slate-500 font-bold uppercase">TEMPORADA ACTUAL</span>
+            </h5>
+
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-900/50 border border-blue-950 p-3.5 rounded-xl space-y-1">
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Partidos Jugados</span>
+                <div className="text-2xl font-black text-white">{matches}</div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-blue-950 p-3.5 rounded-xl space-y-1">
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Minutos Disputados</span>
+                <div className="text-2xl font-black text-blue-400">{minutes} <span className="text-xs font-semibold text-slate-400">min</span></div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-blue-950 p-3.5 rounded-xl space-y-1">
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Goles Marcados</span>
+                <div className="text-2xl font-black text-indigo-400">{goals} <span className="text-xs font-semibold text-slate-400">goles</span></div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-blue-950 p-3.5 rounded-xl space-y-1">
+                <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">Asistencias de Gol</span>
+                <div className="text-2xl font-black text-sky-400">{assists} <span className="text-xs font-semibold text-slate-400">asist.</span></div>
+              </div>
+
+              <div className="bg-slate-900/50 border border-blue-950 p-3.5 rounded-xl space-y-1 col-span-2 flex justify-between items-center">
+                <div className="space-y-1">
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Tarjetas y Disciplina</span>
+                  <div className="flex items-center gap-3">
+                    <span className="inline-flex items-center gap-1.5 text-xs text-yellow-400 font-bold">
+                      <span className="w-2.5 h-3.5 bg-yellow-400 rounded-sm" />
+                      {yellowCards} Amarillas
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-xs text-red-500 font-bold">
+                      <span className="w-2.5 h-3.5 bg-red-500 rounded-sm" />
+                      {redCards} Rojas
+                    </span>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider block">Asistencia Entrenamientos</span>
+                  <div className="text-lg font-black text-sky-300">{attendance}%</div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right: Pitch Heatmap */}
+          <div className="md:col-span-5 space-y-4 text-center">
+            <h5 className="text-[10px] font-black uppercase text-blue-400 tracking-wider text-left border-b border-blue-950 pb-1">
+              ÁREA DE INFLUENCIA ({heatMapConfig.area})
+            </h5>
+            
+            {/* Soccer Pitch Container */}
+            <div className="bg-slate-950 border border-blue-900/30 rounded-2xl p-4 flex items-center justify-center relative overflow-hidden h-44">
+              
+              {/* Pitch Canvas lines */}
+              <div className="absolute inset-4 border border-blue-900/10 flex items-center justify-center pointer-events-none">
+                {/* Midfield line */}
+                <div className="absolute inset-y-0 left-1/2 border-l border-blue-900/10" />
+                {/* Center circle */}
+                <div className="absolute w-12 h-12 rounded-full border border-blue-900/10" />
+                {/* Center point */}
+                <div className="absolute w-1 h-1 bg-blue-900/10 rounded-full" />
+                
+                {/* Goal area Left */}
+                <div className="absolute inset-y-8 left-0 w-6 border-r border-y border-blue-900/10" />
+                {/* Goal area Right */}
+                <div className="absolute inset-y-8 right-0 w-6 border-l border-y border-blue-900/10" />
+              </div>
+
+              {/* Heat Map Hotspots! Position-aware radial glowing circles */}
+              <div 
+                className="absolute w-20 h-20 bg-blue-500/30 rounded-full filter blur-xl animate-pulse"
+                style={{ left: heatMapConfig.left, top: heatMapConfig.top, transform: 'translate(-50%, -50%)' }}
+              />
+              <div 
+                className="absolute w-12 h-12 bg-sky-500/30 rounded-full filter blur-lg animate-pulse"
+                style={{ left: heatMapConfig.left, top: heatMapConfig.top, transform: 'translate(-50%, -50%)' }}
+              />
+              <div 
+                className="absolute w-6 h-6 bg-indigo-400/40 rounded-full filter blur-md animate-pulse"
+                style={{ left: heatMapConfig.left, top: heatMapConfig.top, transform: 'translate(-50%, -50%)' }}
+              />
+
+              {/* Core metrics overlay */}
+              <div className="absolute bottom-2 left-2 right-2 flex justify-between text-[7px] font-black uppercase tracking-widest text-slate-500">
+                <span>UDLP METODOLOGÍA</span>
+                <span>ZONA DE ACCIÓN RECOMENDADA</span>
+              </div>
+            </div>
+
+            <p className="text-[10px] text-slate-400 leading-relaxed text-left italic">
+              * El mapa muestra las zonas de mayor interacción. Mediciones ajustadas a la posición de <strong>{player.posicion}</strong>.
+            </p>
+          </div>
+
+        </div>
+
+        <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA © 2026</span>
+          <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+        </div>
+      </div>
+
+      {/* PAGE 4: VALORACIONES DE CAPTACIÓN Y SCOUTING COMPLETA (SIN SCROLL / FULL-PAGE) */}
+      {attributes.length > 0 && (
+        <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between aspect-[1.41/1] w-full min-h-[600px] shadow-2xl page-break">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_30%,rgba(59,130,246,0.05),transparent_60%)] pointer-events-none" />
+          <div className="flex justify-between items-center border-b border-blue-950 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-sky-400 font-black text-xs">
+                04
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase text-white leading-none">VALORACIÓN TÉCNICA DETALLADA ({player.posicion})</h4>
+                <span className="text-[9px] text-slate-500 uppercase tracking-widest">DESGLOSE COMPLETO DE ATRIBUTOS ESPECÍFICOS Y COMUNES</span>
+              </div>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">UDLP METODOLOGÍA</span>
+          </div>
+
+          {/* High density 3-column layout without scrollbars */}
+          <div className="my-auto grid grid-cols-1 md:grid-cols-3 gap-3 items-start text-left text-[10px]">
+            {/* Column 1: Specific groups (First Half) */}
+            <div className="space-y-2">
+              <span className="text-[8px] font-black text-sky-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">
+                Específicos - Parte I
+              </span>
+              {col1Groups.map(group => {
+                const groupAttrs = attributes.filter(a => group.items.includes(a.atributo));
+                if (groupAttrs.length === 0) return null;
+                return (
+                  <div key={group.category} className="space-y-1 bg-slate-900/40 p-2 rounded-xl border border-slate-850/60">
+                    <span className="text-[8px] font-black text-sky-400 uppercase tracking-widest block pb-0.5">{group.category}</span>
+                    <div className="space-y-0.5">
+                      {groupAttrs.map(attr => (
+                        <div key={attr.atributo} className="flex justify-between items-center text-[9px] py-0.5 border-b border-slate-950">
+                          <span className="text-slate-300 font-medium truncate max-w-[120px]">{attr.atributo}</span>
+                          <span className={cn(
+                            "font-black px-1 py-0.2 rounded text-[9px] min-w-[26px] text-center font-mono",
+                            attr.valor === 0 && "text-red-500 bg-red-500/10",
+                            attr.valor === 1 && "text-red-400 bg-red-400/10",
+                            attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                            attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                            attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                            attr.valor === 5 && "text-sky-400 bg-sky-400/10"
+                          )}>{attr.valor}/5</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Column 2: Specific groups (Second Half) */}
+            <div className="space-y-2">
+              <span className="text-[8px] font-black text-sky-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">
+                Específicos - Parte II
+              </span>
+              {col2Groups.map(group => {
+                const groupAttrs = attributes.filter(a => group.items.includes(a.atributo));
+                if (groupAttrs.length === 0) return null;
+                return (
+                  <div key={group.category} className="space-y-1 bg-slate-900/40 p-2 rounded-xl border border-slate-850/60">
+                    <span className="text-[8px] font-black text-sky-400 uppercase tracking-widest block pb-0.5">{group.category}</span>
+                    <div className="space-y-0.5">
+                      {groupAttrs.map(attr => (
+                        <div key={attr.atributo} className="flex justify-between items-center text-[9px] py-0.5 border-b border-slate-950">
+                          <span className="text-slate-300 font-medium truncate max-w-[120px]">{attr.atributo}</span>
+                          <span className={cn(
+                            "font-black px-1 py-0.2 rounded text-[9px] min-w-[26px] text-center font-mono",
+                            attr.valor === 0 && "text-red-500 bg-red-500/10",
+                            attr.valor === 1 && "text-red-400 bg-red-400/10",
+                            attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                            attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                            attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                            attr.valor === 5 && "text-sky-400 bg-sky-400/10"
+                          )}>{attr.valor}/5</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Column 3: Common attributes */}
+            <div className="space-y-2">
+              <span className="text-[8px] font-black text-blue-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">
+                Comunes Metodológicos
+              </span>
+              {col3Groups.map(group => {
+                const groupAttrs = attributes.filter(a => group.items.includes(a.atributo));
+                if (groupAttrs.length === 0) return null;
+                return (
+                  <div key={group.category} className="space-y-1 bg-slate-900/40 p-2 rounded-xl border border-slate-850/60">
+                    <span className="text-[8px] font-black text-blue-400 uppercase tracking-widest block pb-0.5">{group.category}</span>
+                    <div className="grid grid-cols-2 gap-x-2 gap-y-0.5">
+                      {groupAttrs.map(attr => (
+                        <div key={attr.atributo} className="flex justify-between items-center text-[8.5px] py-0.5 border-b border-slate-950/60">
+                          <span className="text-slate-300 font-medium truncate max-w-[85px]" title={attr.atributo}>{attr.atributo}</span>
+                          <span className={cn(
+                            "font-black px-1 py-0.2 rounded text-[8.5px] min-w-[22px] text-center font-mono",
+                            attr.valor === 0 && "text-red-500 bg-red-500/10",
+                            attr.valor === 1 && "text-red-400 bg-red-400/10",
+                            attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                            attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                            attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                            attr.valor === 5 && "text-sky-400 bg-sky-400/10"
+                          )}>{attr.valor}/5</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+            <span>U.D. LA POVEDA © 2026</span>
+            <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+          </div>
+        </div>
+      )}
+
+      {/* PAGE 5: CONCLUSIONES Y OBSERVACIONES METODOLÓGICAS (DRAFTED FROM ATTRIBUTES) */}
+      {attributes.length > 0 && (
+        <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between aspect-[1.41/1] w-full min-h-[600px] shadow-2xl page-break">
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_70%,rgba(59,130,246,0.06),transparent_60%)] pointer-events-none" />
+          <div className="flex justify-between items-center border-b border-blue-950 pb-4">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-sky-400 font-black text-xs">
+                05
+              </div>
+              <div>
+                <h4 className="text-xs font-black uppercase text-white leading-none">INFORME DE OBSERVACIONES Y CONCLUSIONES</h4>
+                <span className="text-[9px] text-slate-500 uppercase tracking-widest">SÍNTESIS DIVERGENTE BASADA EN VALORACIONES INDIVIDUALIZADAS</span>
+              </div>
+            </div>
+            <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">UDLP METODOLOGÍA</span>
+          </div>
+
+          <div className="my-auto grid grid-cols-1 md:grid-cols-12 gap-6 items-stretch text-left">
+            <div className="md:col-span-8 bg-slate-900/40 border border-blue-950/60 p-5 rounded-2xl flex flex-col justify-between text-[11px] leading-relaxed text-slate-300 space-y-3 whitespace-pre-line">
+              {generateObservations()}
+            </div>
+
+            <div className="md:col-span-4 flex flex-col justify-between space-y-4">
+              <div className="bg-slate-900/30 border border-blue-950 p-4 rounded-2xl flex-1 flex flex-col justify-center text-center space-y-2">
+                <div className="text-xs font-black text-blue-400 uppercase tracking-wider">PLAN DE TRABAJO</div>
+                <p className="text-[9px] text-slate-400 leading-normal">
+                  Se sugiere mantener un seguimiento bimestral con tests de campo específicos y entrenamientos de alta intensidad para consolidar la madurez táctica y corregir deficiencias.
+                </p>
+              </div>
+
+              {/* Stamp and Signatures */}
+              <div className="bg-slate-900/60 border border-blue-950 p-4 rounded-2xl space-y-4">
+                <div className="space-y-1 text-center">
+                  <span className="text-[8px] text-slate-500 uppercase font-bold tracking-widest block">VALIDADO POR EL CLUB</span>
+                  <div className="mx-auto w-12 h-12 rounded-full border border-blue-500/40 flex items-center justify-center bg-blue-950/40 text-blue-400 font-mono text-[10px] font-black">
+                    UDLP
+                  </div>
+                </div>
+
+                <div className="border-t border-slate-800 pt-3 text-center">
+                  <div className="h-6 flex items-end justify-center">
+                    <span className="font-serif italic text-blue-300/60 text-xs tracking-widest font-bold">M. Saguar</span>
+                  </div>
+                  <span className="text-[8px] text-slate-500 uppercase block font-bold tracking-wider mt-1">Dir. Metodología</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+            <span>U.D. LA POVEDA © 2026</span>
+            <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+          </div>
+        </div>
+      )}
+
+      {/* PAGE 6: GRÁFICOS Y ANÁLISIS DE RENDIMIENTO */}
+      <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between w-full min-h-[850px] shadow-2xl page-break">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.03),transparent_70%)] pointer-events-none" />
+        <div className="flex justify-between items-center border-b border-blue-950 pb-4 mb-6">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-sky-400 font-black text-xs">
+              {attributes.length > 0 ? '06' : '04'}
+            </div>
+            <div>
+              <h4 className="text-xs font-black uppercase text-white leading-none">ANALÍTICA GRÁFICA DE RENDIMIENTO</h4>
+              <span className="text-[9px] text-slate-400 uppercase tracking-widest">PERFIL INDIVIDUAL SEGÚN DEMARCACIÓN METODOLÓGICA</span>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">UDLP METODOLOGÍA</span>
+        </div>
+
+        {/* Charts Container */}
+        <div className="my-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
+          
+          {/* Chart 1: Atributos individuales de su posición (Escala 1-5) */}
+          <div className="md:col-span-6 bg-slate-900/60 border border-blue-900/20 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
+            <div className="mb-4">
+              <h5 className="text-[13px] font-black text-white uppercase tracking-wider">MÉTRICAS ESPECÍFICAS DE SCOUTING</h5>
+              <p className="text-[10px] text-sky-400 font-medium">Atributos clave valorados para la posición de {player.posicion}</p>
+            </div>
+            <div className="h-[560px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={finalChart1Data}
+                  layout="vertical"
+                  margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" horizontal={false} />
+                  <XAxis 
+                    type="number" 
+                    domain={[0, 5]} 
+                    ticks={[0, 1, 2, 3, 4, 5]} 
+                    stroke="#ffffff" 
+                    fontSize={11} 
+                    fontWeight="black"
+                  />
+                  <YAxis 
+                    dataKey="name" 
+                    type="category" 
+                    stroke="#ffffff" 
+                    fontSize={8.5} 
+                    fontWeight="black" 
+                    width={115} 
+                    interval={0}
+                    tickFormatter={(value) => value.length > 18 ? `${value.substring(0, 16)}..` : value}
+                  />
+                  <Tooltip 
+                    contentStyle={{ backgroundColor: '#020617', borderColor: '#3b82f6', borderRadius: '8px' }}
+                    labelStyle={{ color: '#38bdf8', fontSize: '11px', fontWeight: 'bold' }}
+                    itemStyle={{ color: '#fff', fontSize: '11px' }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '10px' }}
+                    formatter={(value) => <span className="text-white font-black">{value} (Escala 1-5)</span>}
+                  />
+                  <Bar dataKey="Puntuación" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={10}>
+                    {finalChart1Data.map((entry, index) => {
+                      // Custom color gradient per attribute value
+                      const val = entry['Puntuación'];
+                      let barColor = '#3b82f6'; // Blue
+                      if (val >= 4.5) barColor = '#38bdf8'; // Sky Blue
+                      else if (val >= 4.0) barColor = '#10b981'; // Green
+                      else if (val <= 2.0) barColor = '#f97316'; // Orange
+                      return <Cell key={`cell-${index}`} fill={barColor} />;
+                    })}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Chart 2: Medias por Categoría de la Demarcación */}
+          <div className="md:col-span-6 bg-slate-900/60 border border-blue-900/20 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
+            <div className="mb-4">
+              <h5 className="text-[13px] font-black text-white uppercase tracking-wider">PROMEDIO POR ÁREAS DE JUEGO</h5>
+              <p className="text-[10px] text-sky-400 font-medium">Rendimiento agrupado por categorías específicas vs Objetivo Club</p>
+            </div>
+            <div className="h-[560px] w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={finalChart2Data}
+                  margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
+                >
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis 
+                    dataKey="category" 
+                    stroke="#ffffff" 
+                    fontSize={10.5} 
+                    fontWeight="black"
+                    tickFormatter={(value) => value.length > 12 ? `${value.substring(0, 10)}.` : value}
+                  />
+                  <YAxis 
+                    domain={[0, 5]} 
+                    ticks={[0, 1, 2, 3, 4, 5]} 
+                    stroke="#ffffff" 
+                    fontSize={11} 
+                    fontWeight="black"
+                  />
+                  <Tooltip
+                    contentStyle={{ backgroundColor: '#020617', borderColor: '#3b82f6', borderRadius: '8px' }}
+                    labelStyle={{ color: '#38bdf8', fontSize: '11px', fontWeight: 'bold' }}
+                    itemStyle={{ fontSize: '11px' }}
+                  />
+                  <Legend 
+                    wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
+                    formatter={(value) => <span className="text-white font-black px-1">{value}</span>}
+                  />
+                  <Bar dataKey="Media Jugadora" fill="#3b82f6" name="Media Jugadora" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar dataKey="Objetivo Club" fill="#1e293b" name="Objetivo Club" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="3,3" radius={[4, 4, 0, 0]} barSize={14} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+        </div>
+
+        <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA © 2026</span>
+          <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+        </div>
+      </div>
+
+    </div>
+  );
+}
+
+
+function FUTPlayerCard({ player, stats }: { player: TeamPlayer; stats: any }) {
+  const angles = [-90, -30, 30, 90, 150, 210].map(deg => deg * Math.PI / 180);
+  const cx = 95;
+  const cy = 105;
+  const r = 50;
+
+  const valPoints = [
+    stats.ritmo ?? 50,
+    stats.regate ?? 50,
+    stats.fisico ?? 50,
+    stats.defensa ?? 50,
+    stats.pase ?? 50,
+    stats.tiro ?? 50
+  ].map((val: number, idx: number) => {
+    const radius = (val / 100) * r;
+    const angle = angles[idx];
+    const x = cx + radius * Math.cos(angle);
+    const y = cy + radius * Math.sin(angle);
+    return `${x.toFixed(1)},${y.toFixed(1)}`;
+  }).join(' ');
+
+  const gridPoints = (factor: number) => {
+    return angles.map((angle) => {
+      const x = cx + r * factor * Math.cos(angle);
+      const y = cy + r * factor * Math.sin(angle);
+      return `${x.toFixed(1)},${y.toFixed(1)}`;
+    }).join(' ');
+  };
+
+  const renderVertexLabel = (val: number, label: string, x: number, y: number, textAnchor: 'start' | 'end' | 'middle') => {
+    return (
+      <g transform={`translate(${x}, ${y})`}>
+        {/* Glowing glass pill behind the vertex score */}
+        <rect 
+          x={textAnchor === 'start' ? -2 : textAnchor === 'end' ? -30 : -16} 
+          y={-10} 
+          width={32} 
+          height={16} 
+          rx={4} 
+          fill="#050716" 
+          stroke="rgba(245, 158, 11, 0.4)" 
+          strokeWidth="1" 
+        />
+        <text 
+          x={textAnchor === 'start' ? 2 : textAnchor === 'end' ? -26 : -11} 
+          y={1} 
+          fill="rgba(255,255,255,0.5)" 
+          fontSize="6" 
+          fontWeight="black" 
+          textAnchor="start"
+        >
+          {label}
+        </text>
+        <text 
+          x={textAnchor === 'start' ? 18 : textAnchor === 'end' ? -10 : 7} 
+          y={1} 
+          fill="#ffffff" 
+          fontSize="8" 
+          fontWeight="extrabold" 
+          textAnchor="start"
+        >
+          {val}
+        </text>
+      </g>
+    );
+  };
+
+  return (
+    <div className="relative w-[340px] h-[520px] rounded-[2.5rem] bg-gradient-to-b from-amber-200 via-yellow-100 to-amber-300 p-1 shadow-[0_0_35px_rgba(245,158,11,0.25)] flex flex-col justify-between overflow-hidden text-white font-sans select-none border border-amber-400">
+      {/* Dark Outer Shield Border Trim */}
+      <div className="absolute inset-[3px] rounded-[2.35rem] bg-[#020514] overflow-hidden flex flex-col justify-between p-3.5">
+        
+        {/* Starry / Cosmic Background Layer */}
+        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_center,rgba(59,130,246,0.3)_0%,transparent_70%)] pointer-events-none" />
+        <div className="absolute inset-0 opacity-40 bg-[radial-gradient(circle_at_top_right,rgba(239,68,68,0.25)_0%,transparent_50%)] pointer-events-none" />
+        {/* Subtle diagonal speed lines */}
+        <div className="absolute inset-0 bg-[linear-gradient(135deg,rgba(255,255,255,0.03)_25%,transparent_25%,transparent_50%,rgba(255,255,255,0.03)_50%,rgba(255,255,255,0.03)_75%,transparent_75%,transparent)] bg-[length:20px_20px] pointer-events-none" />
+
+        {/* Top Area: Rating, Flags, Photo, Shield Emblem */}
+        <div className="relative h-40 flex justify-between items-start z-10">
+          
+          {/* Top Left: Overall Rating and Spain Flag */}
+          <div className="flex flex-col items-center pl-1 mt-1">
+            <span className="text-4xl font-extrabold font-mono tracking-tighter text-amber-400 drop-shadow-[0_2px_4px_rgba(0,0,0,0.6)]">
+              {stats.rating_general}
+            </span>
+            <span className="text-[9px] font-black text-slate-400 tracking-wider uppercase mt-0.5">
+              {player.posicion.substring(0, 3)}
+            </span>
+            
+            {/* Beautiful CSS Spanish Flag */}
+            <div className="w-8 h-5 flex flex-col rounded overflow-hidden border border-white/10 mt-2 shadow-sm">
+              <div className="bg-red-600 h-1.5 w-full" />
+              <div className="bg-yellow-400 h-2 w-full flex items-center justify-center relative">
+                <div className="w-1 h-1 bg-red-700 rounded-full" />
+              </div>
+              <div className="bg-red-600 h-1.5 w-full" />
+            </div>
+
+            {/* Ball Icon */}
+            <svg viewBox="0 0 24 24" className="w-6 h-6 mt-2 text-slate-500 fill-slate-500/10" stroke="currentColor" strokeWidth="1.5">
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a10 10 0 0 1 8 4l-4 3-4-2-4 2-4-3a10 10 0 0 1 8-4z" />
+              <path d="M4 6l4 3v5l-4 3" />
+              <path d="M20 6l-4 3v5l4 3" />
+              <path d="M8 14l4 2 4-2v4l-4 2-4-2v-4z" />
+            </svg>
+          </div>
+
+          {/* Center: Cutout Player Photo */}
+          <div className="absolute left-1/2 -translate-x-1/2 w-40 h-40 overflow-hidden flex items-end justify-center">
+            {player.foto_url ? (
+              <img src={player.foto_url} alt={player.nombre} referrerPolicy="no-referrer" className="w-full h-full object-cover object-top scale-105" />
+            ) : (
+              <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-2">
+                <Users className="w-12 h-12 text-slate-700" />
+              </div>
+            )}
+            {/* Fade overlay */}
+            <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#020514] to-transparent pointer-events-none" />
+          </div>
+
+          {/* Top Right: Custom Club Crest Shield */}
+          <div className="mt-1 pr-1">
+            <div className="w-10 h-11 bg-gradient-to-b from-blue-600 to-indigo-950 border-2 border-amber-400 rounded-b-xl flex flex-col items-center justify-center shadow-lg overflow-hidden">
+              <span className="text-[5px] font-black text-amber-300 tracking-tighter leading-none mt-1">U.D.</span>
+              <span className="text-[7px] font-extrabold text-white tracking-widest leading-none">LA POVEDA</span>
+              <div className="w-2.5 h-2.5 bg-white rotate-45 border border-blue-900 mt-1 flex items-center justify-center">
+                <div className="w-1.5 h-1.5 bg-red-600 rotate-45" />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Player Name Banner */}
+        <div className="text-center z-10 -mt-1 selection:bg-amber-400 selection:text-slate-950">
+          <h3 className="text-2xl font-black uppercase tracking-tight text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] leading-none">
+            {player.apellidos || player.nombre}
+          </h3>
+          {player.apellidos && (
+            <h4 className="text-[10px] font-bold uppercase tracking-widest text-slate-300 drop-shadow-[0_1px_3px_rgba(0,0,0,0.8)] mt-0.5">
+              {player.nombre}
+            </h4>
+          )}
+        </div>
+
+        {/* Mid Horizontal Ribbon */}
+        <div className="mx-2 mt-2 bg-gradient-to-r from-red-600/30 via-slate-950/90 to-blue-600/30 border-y border-amber-500/20 py-1 flex items-center justify-center gap-2 z-10 rounded-md">
+          <div className="w-4 h-2.5 flex flex-col rounded-xs overflow-hidden border border-white/20">
+            <div className="bg-red-600 h-0.5 w-full" />
+            <div className="bg-yellow-400 h-1.5 w-full" />
+            <div className="bg-red-600 h-0.5 w-full" />
+          </div>
+          <span className="text-[8px] font-black uppercase tracking-wider text-amber-400">CD LA POVEDA</span>
+          <span className="text-white/30 text-[8px]">•</span>
+          <span className="text-[8px] font-extrabold uppercase text-white tracking-wider">
+            {player.anio_nacimiento ? `${2026 - parseInt(player.anio_nacimiento as any)} AÑOS` : '15 AÑOS'}
+          </span>
+        </div>
+
+        {/* Middle Split Area (Left panel, Right chart) */}
+        <div className="grid grid-cols-12 gap-1 px-1 mt-2.5 flex-1 items-stretch z-10">
+          
+          {/* Left panel: Season Statistics */}
+          <div className="col-span-5 flex flex-col justify-between gap-1 pr-1 border-r border-slate-900/80">
+            {/* Matches */}
+            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-1 flex items-center gap-1.5 text-left">
+              <div className="w-5 h-5 rounded-full bg-blue-500/10 flex items-center justify-center shrink-0">
+                <svg viewBox="0 0 24 24" className="w-3 h-3 text-blue-400" stroke="currentColor" fill="none" strokeWidth="2.5">
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="M12 2a10 10 0 0 1 8 4l-4 3-4-2-4 2-4-3a10 10 0 0 1 8-4z" />
+                </svg>
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-black text-white leading-none">{stats.partidos_jugados}</div>
+                <div className="text-[6px] font-bold uppercase text-slate-500 tracking-wider">Partidos</div>
+              </div>
+            </div>
+
+            {/* Goals */}
+            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-1 flex items-center gap-1.5 text-left">
+              <div className="w-5 h-5 rounded-full bg-emerald-500/10 flex items-center justify-center shrink-0">
+                <div className="w-1.5 h-1.5 bg-emerald-400 rounded-full" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-black text-emerald-400 leading-none">{stats.goles}</div>
+                <div className="text-[6px] font-bold uppercase text-slate-500 tracking-wider">Goles</div>
+              </div>
+            </div>
+
+            {/* Yellow / Red Cards */}
+            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-1 flex items-center gap-1.5 text-left">
+              <div className="flex gap-1 shrink-0">
+                <div className="w-1.5 h-2.5 bg-yellow-400 rounded-xs" />
+                <div className="w-1.5 h-2.5 bg-red-500 rounded-xs" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-black text-white leading-none">
+                  {stats.tarjetas_amarillas}<span className="text-slate-600 text-[9px] font-semibold">/</span>{stats.tarjetas_rojas}
+                </div>
+                <div className="text-[6px] font-bold uppercase text-slate-500 tracking-wider">Tarjetas</div>
+              </div>
+            </div>
+
+            {/* Minutes */}
+            <div className="bg-slate-950/60 border border-slate-900 rounded-lg p-1 flex items-center gap-1.5 text-left">
+              <div className="w-5 h-5 rounded-full bg-amber-500/10 flex items-center justify-center shrink-0">
+                <Clock className="w-2.5 h-2.5 text-amber-500" />
+              </div>
+              <div className="min-w-0">
+                <div className="text-[11px] font-black text-amber-400 leading-none">{stats.minutos_jugados}</div>
+                <div className="text-[6px] font-bold uppercase text-slate-500 tracking-wider">Minutos</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Right panel: SVG Radar Spider-Web */}
+          <div className="col-span-7 flex flex-col items-center justify-center relative pl-1 overflow-visible">
+            <svg viewBox="0 0 200 210" className="w-full h-full drop-shadow-[0_2px_8px_rgba(245,158,11,0.15)] overflow-visible">
+              <circle cx={cx} cy={cy} r={r} fill="url(#spiderGlow)" opacity="0.2" />
+              
+              <defs>
+                <radialGradient id="spiderGlow" cx="50%" cy="50%" r="50%">
+                  <stop offset="0%" stopColor="#f59e0b" />
+                  <stop offset="100%" stopColor="transparent" />
+                </radialGradient>
+              </defs>
+
+              {/* Hexagon Rings */}
+              <polygon points={gridPoints(1.0)} fill="none" stroke="rgba(245, 158, 11, 0.3)" strokeWidth="1.2" />
+              <polygon points={gridPoints(0.7)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" strokeDasharray="1,1" />
+              <polygon points={gridPoints(0.4)} fill="none" stroke="rgba(255,255,255,0.08)" strokeWidth="0.8" strokeDasharray="1,1" />
+
+              {/* Connecting Spokes */}
+              {angles.map((angle, idx) => {
+                const x = cx + r * Math.cos(angle);
+                const y = cy + r * Math.sin(angle);
+                return (
+                  <line 
+                    key={idx} 
+                    x1={cx} 
+                    y1={cy} 
+                    x2={x} 
+                    y2={y} 
+                    stroke="rgba(255,255,255,0.12)" 
+                    strokeWidth="0.8" 
+                    strokeDasharray="2,2" />
+                );
+              })}
+
+              {/* Filled Attributes Area */}
+              <polygon 
+                points={valPoints} 
+                fill="rgba(245, 158, 11, 0.22)" 
+                stroke="#f59e0b" 
+                strokeWidth="2.5" 
+                strokeLinejoin="round"
+                className="drop-shadow-[0_0_6px_rgba(245,158,11,0.4)]"
+              />
+
+              {/* Vertices Score badges */}
+              {renderVertexLabel(stats.ritmo ?? 50, 'RIT', cx, cy - r - 12, 'middle')}
+              {renderVertexLabel(stats.regate ?? 50, 'REG', cx + r * Math.cos(angles[1]) + 18, cy + r * Math.sin(angles[1]) - 3, 'start')}
+              {renderVertexLabel(stats.fisico ?? 50, 'FIS', cx + r * Math.cos(angles[2]) + 18, cy + r * Math.sin(angles[2]) + 10, 'start')}
+              {renderVertexLabel(stats.defensa ?? 50, 'DEF', cx, cy + r + 18, 'middle')}
+              {renderVertexLabel(stats.pase ?? 50, 'PAS', cx + r * Math.cos(angles[4]) - 18, cy + r * Math.sin(angles[4]) + 10, 'end')}
+              {renderVertexLabel(stats.tiro ?? 50, 'TIR', cx + r * Math.cos(angles[5]) - 18, cy + r * Math.sin(angles[5]) - 3, 'end')}
+            </svg>
+          </div>
+        </div>
+
+        {/* Card Footer: Position Banner */}
+        <div className="mt-3 border-t border-slate-900/60 pt-2 pb-0.5 text-center z-10">
+          <span className="text-xs font-black uppercase tracking-[0.2em] text-amber-400 bg-gradient-to-r from-transparent via-amber-400/10 to-transparent px-6 py-1 rounded-full border-x border-amber-500/10">
+            {player.posicion}
+          </span>
+        </div>
+
+      </div>
+    </div>
+  );
 }
 
 export default function Plantilla() {
@@ -45,12 +1166,141 @@ export default function Plantilla() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPlayerProfile, setSelectedPlayerProfile] = useState<TeamPlayer | null>(null);
+  const [profileAttributes, setProfileAttributes] = useState<{ atributo: string; valor: number }[]>([]);
   const [playerToDelete, setPlayerToDelete] = useState<TeamPlayer | null>(null);
   
   // WhatsApp composer state
   const [whatsappModalPlayer, setWhatsappModalPlayer] = useState<TeamPlayer | null>(null);
   const [whatsappMessageText, setWhatsappMessageText] = useState('');
   
+  // Print preview state
+  const [showPrintPreview, setShowPrintPreview] = useState(false);
+  const [printReportType, setPrintReportType] = useState<'FUT' | 'DOSSIER' | 'BOTH'>('FUT');
+  
+  // Stats and FIFA attributes editing state
+  const [isEditingStats, setIsEditingStats] = useState(false);
+  const [statsForm, setStatsForm] = useState({
+    partidos_jugados: 14,
+    minutos_jugados: 1120,
+    goles: 9,
+    asistencias: 5,
+    tarjetas_amarillas: 2,
+    tarjetas_rojas: 0,
+    asistencia_entrenamientos: 93,
+    ritmo: 85,
+    tiro: 82,
+    pase: 73,
+    regate: 80,
+    defensa: 34,
+    fisico: 72,
+    rating_general: 85
+  });
+
+  // Helper function to get player stats with realistic defaults based on position
+  const getPlayerStats = (player: TeamPlayer) => {
+    const pos = (player.posicion || 'DELANTERO').toUpperCase();
+    const isGk = pos.includes('PORTERO') || pos.includes('GK') || pos.includes('GOALKEEPER');
+    const isDf = pos.includes('DEFENSA') || pos.includes('CENTRAL') || pos.includes('LATERAL') || pos.includes('DFC') || pos.includes('DF');
+    const isMf = pos.includes('MEDIO') || pos.includes('INTERIOR') || pos.includes('PUNTA') || pos.includes('MCO') || pos.includes('MC');
+    
+    // Retrieve real match and attendance session records for dynamic statistics aggregation
+    const matchesKey = `team_matches_${selectedTeam}`;
+    const sessionsKey = `team_sessions_${selectedTeam}`;
+    const savedMatches = localStorage.getItem(matchesKey);
+    const savedSessions = localStorage.getItem(sessionsKey);
+
+    const teamMatches = savedMatches ? JSON.parse(savedMatches) : [];
+    const teamSessions = savedSessions ? JSON.parse(savedSessions) : [];
+
+    // 1. Calculate training attendance dynamically from real training sessions
+    const trainingSessions = teamSessions.filter((s: any) => s.tipo === 'Entrenamiento');
+    let dynamicAttendance = player.asistencia_entrenamientos ?? 93;
+
+    if (trainingSessions.length > 0) {
+      let sessionsWithPlayer = 0;
+      let presentCount = 0;
+
+      trainingSessions.forEach((s: any) => {
+        const record = s.records?.find((r: any) => r.playerId === player.id);
+        if (record) {
+          sessionsWithPlayer += 1;
+          if (
+            record.status === 'Presente' || 
+            record.status === 'Retraso' || 
+            record.status === 'Justificado' || 
+            record.status === 'Lesionado'
+          ) {
+            presentCount += 1;
+          }
+        }
+      });
+
+      if (sessionsWithPlayer > 0) {
+        dynamicAttendance = Math.round((presentCount / sessionsWithPlayer) * 100);
+      }
+    }
+
+    // 2. Calculate match statistics (matches played, minutes, goals, yellow cards, red cards)
+    const finishedMatches = teamMatches.filter((m: any) => m.estado === 'Finalizado');
+    const hasFinishedMatches = finishedMatches.some((m: any) => 
+      m.estadisticas?.jugadoras_stats?.some((s: any) => s.playerId === player.id)
+    );
+
+    let partidos_jugados = player.partidos_jugados ?? 14;
+    let minutos_jugados = player.minutos_jugados ?? (player.partidos_jugados ?? 14) * 82;
+    let goles = player.goles ?? (isGk ? 0 : isDf ? 1 : isMf ? 3 : 9);
+    let asistencias = player.asistencias ?? (isGk ? 0 : isDf ? 2 : isMf ? 6 : 4);
+    let tarjetas_amarillas = player.tarjetas_amarillas ?? 2;
+    let tarjetas_rojas = player.tarjetas_rojas ?? 0;
+
+    if (hasFinishedMatches) {
+      let playedCount = 0;
+      let totalMin = 0;
+      let totalGoles = 0;
+      let totalAssists = 0;
+      let totalYellows = 0;
+      let totalReds = 0;
+
+      finishedMatches.forEach((m: any) => {
+        const pStat = m.estadisticas?.jugadoras_stats?.find((s: any) => s.playerId === player.id);
+        if (pStat) {
+          if (pStat.minutos > 0 || pStat.titular || pStat.suplente) {
+            playedCount += 1;
+            totalMin += pStat.minutos || 0;
+            totalGoles += pStat.goles_metidos || 0;
+            totalAssists += pStat.asistencias || 0;
+            totalYellows += pStat.tarjetas_amarillas || 0;
+            totalReds += pStat.tarjetas_rojas || 0;
+          }
+        }
+      });
+
+      partidos_jugados = playedCount;
+      minutos_jugados = totalMin;
+      goles = totalGoles;
+      asistencias = totalAssists;
+      tarjetas_amarillas = totalYellows;
+      tarjetas_rojas = totalReds;
+    }
+
+    return {
+      partidos_jugados,
+      minutos_jugados,
+      goles,
+      asistencias,
+      tarjetas_amarillas,
+      tarjetas_rojas,
+      asistencia_entrenamientos: dynamicAttendance,
+      ritmo: player.ritmo ?? (isGk ? 68 : isDf ? 72 : isMf ? 78 : 86),
+      tiro: player.tiro ?? (isGk ? 15 : isDf ? 45 : isMf ? 73 : 82),
+      pase: player.pase ?? (isGk ? 62 : isDf ? 65 : isMf ? 82 : 74),
+      regate: player.regate ?? (isGk ? 55 : isDf ? 64 : isMf ? 80 : 83),
+      defensa: player.defensa ?? (isGk ? 84 : isDf ? 83 : isMf ? 68 : 34),
+      fisico: player.fisico ?? (isGk ? 76 : isDf ? 82 : isMf ? 74 : 72),
+      rating_general: player.rating_general ?? (isGk ? 78 : isDf ? 77 : isMf ? 80 : 82),
+    };
+  };
+
   // Form state
   const [formData, setFormData] = useState({
     nombre: '',
@@ -84,7 +1334,98 @@ export default function Plantilla() {
     
     // Load signed players from scouting database
     fetchSignedScoutingPlayers();
+
+    // Background pre-fetch matches and sessions from Supabase to sync the player stats
+    const syncData = async () => {
+      try {
+        const { data: matchesData } = await supabase
+          .from('team_matches')
+          .select('*')
+          .eq('team', selectedTeam);
+        if (matchesData) {
+          const formatted = matchesData.map(item => ({
+            id: item.id,
+            rival: item.rival,
+            fecha: item.fecha,
+            hora: item.hora,
+            tipo: item.tipo,
+            competicion: item.competicion,
+            estado: item.estado,
+            goles_favor: item.goles_favor !== null ? item.goles_favor : undefined,
+            goles_contra: item.goles_contra !== null ? item.goles_contra : undefined,
+            acta: item.acta || undefined,
+            estadisticas: item.estadisticas || undefined
+          }));
+          localStorage.setItem(`team_matches_${selectedTeam}`, JSON.stringify(formatted));
+        }
+      } catch (err) {
+        console.warn("Failed background matches sync in Plantilla:", err);
+      }
+
+      try {
+        const { data: sessionsData } = await supabase
+          .from('attendance_sessions')
+          .select('*')
+          .eq('team', selectedTeam);
+        if (sessionsData) {
+          const formatted = sessionsData.map(item => ({
+            id: item.id,
+            fecha: item.fecha,
+            tipo: item.tipo,
+            descripcion: item.descripcion || '',
+            records: item.records || [],
+            tareas: item.tareas || [],
+            archivos: item.archivos || []
+          }));
+          localStorage.setItem(`team_sessions_${selectedTeam}`, JSON.stringify(formatted));
+        }
+      } catch (err) {
+        console.warn("Failed background sessions sync in Plantilla:", err);
+      }
+    };
+    syncData();
   }, [selectedTeam]);
+
+  // Synchronize statistics form and scouting attributes when player profile is selected
+  useEffect(() => {
+    if (selectedPlayerProfile) {
+      setStatsForm(getPlayerStats(selectedPlayerProfile));
+      setIsEditingStats(false);
+
+      // Fetch scouting attributes from the database for the selected player
+      const fetchProfileAttributes = async () => {
+        try {
+          // Find the player in scoutingSignedPlayers by ID or name to get the correct player_id in scouting database
+          let dbPlayerId = selectedPlayerProfile.id;
+          const match = scoutingSignedPlayers.find(p => 
+            p.id === selectedPlayerProfile.id || 
+            `${p.nombre.trim()} ${p.apellidos.trim()}`.toLowerCase() === `${selectedPlayerProfile.nombre.trim()} ${selectedPlayerProfile.apellidos.trim()}`.toLowerCase()
+          );
+          if (match) {
+            dbPlayerId = match.id;
+          }
+
+          const { data, error } = await supabase
+            .from('player_attributes')
+            .select('atributo, valor')
+            .eq('player_id', dbPlayerId);
+
+          if (!error && data) {
+            setProfileAttributes(data);
+          } else {
+            setProfileAttributes([]);
+          }
+        } catch (err) {
+          console.error("Error fetching player profile attributes", err);
+          setProfileAttributes([]);
+        }
+      };
+
+      fetchProfileAttributes();
+    } else {
+      setProfileAttributes([]);
+    }
+  }, [selectedPlayerProfile, scoutingSignedPlayers]);
 
   const fetchSignedScoutingPlayers = async () => {
     try {
@@ -160,6 +1501,28 @@ export default function Plantilla() {
   const saveRoster = (updated: TeamPlayer[]) => {
     setPlayers(updated);
     localStorage.setItem(`team_roster_${selectedTeam}`, JSON.stringify(updated));
+  };
+
+  const handleSavePlayerStats = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedPlayerProfile) return;
+
+    const updatedPlayers = players.map(p => {
+      if (p.id === selectedPlayerProfile.id) {
+        const updated = {
+          ...p,
+          ...statsForm
+        };
+        // Update selectedPlayerProfile state so the UI reflects the saved values
+        setSelectedPlayerProfile(updated);
+        return updated;
+      }
+      return p;
+    });
+
+    saveRoster(updatedPlayers);
+    setIsEditingStats(false);
+    toast.success(`Estadísticas de ${selectedPlayerProfile.nombre} actualizadas con éxito.`);
   };
 
   const handleAddPlayer = (e: React.FormEvent) => {
@@ -666,29 +2029,429 @@ export default function Plantilla() {
               </div>
 
               {/* Data sheets grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Tech specifications */}
-                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-2">
-                  <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-900 pb-1.5">Especificaciones Físicas y Técnicas</h5>
-                  <div className="text-xs space-y-1.5 text-slate-300">
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Año Nacimiento:</span> <strong className="text-white">{selectedPlayerProfile.anio_nacimiento || 'N/A'}</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Lateralidad:</span> <strong className="text-white">{selectedPlayerProfile.lateralidad || 'Derecho'}</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Contacto Telefónico:</span> <strong className="text-white">{selectedPlayerProfile.telefono || 'No registrado'}</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Email:</span> <strong className="text-white truncate max-w-[150px]">{selectedPlayerProfile.email || 'No registrado'}</strong></div>
-                  </div>
-                </div>
+              {(() => {
+                const currentStats = getPlayerStats(selectedPlayerProfile);
+                return isEditingStats ? (
+                  <form onSubmit={handleSavePlayerStats} className="space-y-4 text-left w-full">
+                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-3">
+                      <h5 className="text-[11px] text-blue-400 font-extrabold uppercase tracking-wider border-b border-slate-900 pb-1.5 flex items-center gap-1.5">
+                        <Activity className="w-4 h-4 text-blue-500" />
+                        <span>Estadísticas Oficiales de Temporada</span>
+                      </h5>
+                      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Partidos Jugados</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            value={statsForm.partidos_jugados}
+                            onChange={(e) => setStatsForm({...statsForm, partidos_jugados: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Minutos Jugados</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            value={statsForm.minutos_jugados}
+                            onChange={(e) => setStatsForm({...statsForm, minutos_jugados: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Goles Marcados</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            value={statsForm.goles}
+                            onChange={(e) => setStatsForm({...statsForm, goles: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Asistencias</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            value={statsForm.asistencias}
+                            onChange={(e) => setStatsForm({...statsForm, asistencias: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Tarjetas Amarillas</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            value={statsForm.tarjetas_amarillas}
+                            onChange={(e) => setStatsForm({...statsForm, tarjetas_amarillas: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Tarjetas Rojas / Expulsiones</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            value={statsForm.tarjetas_rojas}
+                            onChange={(e) => setStatsForm({...statsForm, tarjetas_rojas: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Asistencia Entrenamientos (%)</label>
+                          <input 
+                            type="number" 
+                            min="0"
+                            max="100"
+                            value={statsForm.asistencia_entrenamientos}
+                            onChange={(e) => setStatsForm({...statsForm, asistencia_entrenamientos: parseInt(e.target.value) || 0})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
-                {/* Mocked performance ratings */}
-                <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-2">
-                  <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-900 pb-1.5">Métricas de Rendimiento Estimado</h5>
-                  <div className="text-xs space-y-1.5 text-slate-300">
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Partidos Jugados:</span> <strong className="text-white">14 partidos</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Goles Marcados:</span> <strong className="text-emerald-400">{selectedPlayerProfile.posicion === 'DELANTERO' ? 9 : selectedPlayerProfile.posicion === 'EXTREMO' ? 6 : 1}</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Asistencias Realizadas:</span> <strong className="text-indigo-400">5 asistencias</strong></div>
-                    <div className="flex justify-between"><span className="text-slate-500 font-semibold">Asistencia Entrenamientos:</span> <strong className="text-amber-400">93% de las sesiones</strong></div>
+                    <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-3">
+                      <h5 className="text-[11px] text-amber-500 font-extrabold uppercase tracking-wider border-b border-slate-900 pb-1.5 flex items-center gap-1.5">
+                        <Award className="w-4 h-4 text-amber-500" />
+                        <span>Atributos Estilo FIFA (0 - 99)</span>
+                      </h5>
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Media General (OVR)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.rating_general}
+                            onChange={(e) => setStatsForm({...statsForm, rating_general: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-amber-400 focus:outline-none focus:border-amber-500 mt-1 font-black"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Ritmo (PAC)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.ritmo}
+                            onChange={(e) => setStatsForm({...statsForm, ritmo: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Tiro (SHO)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.tiro}
+                            onChange={(e) => setStatsForm({...statsForm, tiro: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Pase (PAS)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.pase}
+                            onChange={(e) => setStatsForm({...statsForm, pase: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Regate (DRI)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.regate}
+                            onChange={(e) => setStatsForm({...statsForm, regate: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Defensa (DEF)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.defensa}
+                            onChange={(e) => setStatsForm({...statsForm, defensa: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-[10px] text-slate-400 font-bold uppercase">Físico (PHY)</label>
+                          <input 
+                            type="number" 
+                            min="1"
+                            max="99"
+                            value={statsForm.fisico}
+                            onChange={(e) => setStatsForm({...statsForm, fisico: parseInt(e.target.value) || 50})}
+                            className="w-full bg-slate-950 border border-slate-800 hover:border-slate-700 rounded-xl p-2 text-xs text-white focus:outline-none focus:border-blue-500 mt-1 font-semibold"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-end gap-2 pt-2 border-t border-slate-850">
+                      <Button 
+                        type="button" 
+                        variant="outline" 
+                        onClick={() => setIsEditingStats(false)}
+                        className="text-xs border-slate-800 text-slate-400 hover:text-white"
+                      >
+                        Cancelar
+                      </Button>
+                      <Button 
+                        type="submit" 
+                        className="text-xs bg-amber-500 hover:bg-amber-400 text-slate-950 font-extrabold uppercase rounded-xl px-4 py-2 flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/10"
+                      >
+                        <Save className="w-4 h-4" />
+                        <span>Guardar Estadísticas</span>
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="space-y-4 w-full text-left">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* Left: General data & Season stats */}
+                      <div className="space-y-4">
+                        <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-2">
+                          <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider border-b border-slate-900 pb-1.5 flex justify-between items-center">
+                            <span>Especificaciones Personales</span>
+                            <span className="text-slate-600 font-semibold">DORSAL #{selectedPlayerProfile.dorsal}</span>
+                          </h5>
+                          <div className="text-xs space-y-1.5 text-slate-300">
+                            <div className="flex justify-between"><span className="text-slate-500 font-semibold">Año Nacimiento:</span> <strong className="text-white">{selectedPlayerProfile.anio_nacimiento || 'N/A'}</strong></div>
+                            <div className="flex justify-between"><span className="text-slate-500 font-semibold">Lateralidad:</span> <strong className="text-white">{selectedPlayerProfile.lateralidad || 'Derecho'}</strong></div>
+                            <div className="flex justify-between"><span className="text-slate-500 font-semibold">Teléfono:</span> <strong className="text-white">{selectedPlayerProfile.telefono || 'No registrado'}</strong></div>
+                            <div className="flex justify-between"><span className="text-slate-500 font-semibold">Email:</span> <strong className="text-white truncate max-w-[150px]">{selectedPlayerProfile.email || 'No registrado'}</strong></div>
+                          </div>
+                        </div>
+
+                        <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-2">
+                          <div className="flex justify-between items-center border-b border-slate-900 pb-1.5">
+                            <h5 className="text-[10px] text-slate-400 font-bold uppercase tracking-wider flex items-center gap-1">
+                              <Activity className="w-3.5 h-3.5 text-blue-400" />
+                              <span>Estadísticas de Temporada</span>
+                            </h5>
+                            <button 
+                              onClick={() => {
+                                setStatsForm(currentStats);
+                                setIsEditingStats(true);
+                              }}
+                              className="text-[10px] text-blue-400 hover:text-blue-300 font-bold uppercase flex items-center gap-1 bg-blue-500/10 hover:bg-blue-500/20 px-2 py-0.5 rounded-md border border-blue-500/10"
+                            >
+                              <Edit className="w-2.5 h-2.5" />
+                              <span>Editar</span>
+                            </button>
+                          </div>
+                          <div className="text-xs space-y-1.5 text-slate-300">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold">Partidos Disputados:</span> 
+                              <strong className="text-white">{currentStats.partidos_jugados} partidos</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold flex items-center gap-1">
+                                <Clock className="w-3 h-3 text-slate-500" />
+                                <span>Minutos Jugados:</span>
+                              </span> 
+                              <strong className="text-white">{currentStats.minutos_jugados} min</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold">Goles Convertidos:</span> 
+                              <strong className="text-emerald-400 font-extrabold">{currentStats.goles} goles</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold">Asistencias de Gol:</span> 
+                              <strong className="text-blue-400">{currentStats.asistencias} asistencias</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold flex items-center gap-1">
+                                <span className="w-2.5 h-3.5 bg-yellow-400 rounded-sm inline-block" />
+                                <span>Tarjetas Amarillas:</span>
+                              </span> 
+                              <strong className="text-yellow-400">{currentStats.tarjetas_amarillas} amarillas</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold flex items-center gap-1">
+                                <span className="w-2.5 h-3.5 bg-red-500 rounded-sm inline-block" />
+                                <span>Expulsiones / Rojas:</span>
+                              </span> 
+                              <strong className={currentStats.tarjetas_rojas > 0 ? "text-red-500 font-extrabold" : "text-slate-400"}>{currentStats.tarjetas_rojas} rojas</strong>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 font-semibold">Asistencia Entrenamientos:</span> 
+                              <strong className="text-amber-400">{currentStats.asistencia_entrenamientos}% de las sesiones</strong>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Right: Gorgeous FIFA Ultimate Team Style Card Preview */}
+                      <div className="flex flex-col items-center justify-center bg-slate-950/30 border border-slate-850 p-4 rounded-2xl relative overflow-hidden group">
+                        <div className="absolute top-2 right-2 z-10">
+                          <button 
+                            onClick={() => {
+                              setStatsForm(currentStats);
+                              setIsEditingStats(true);
+                            }}
+                            className="bg-amber-500/10 hover:bg-amber-500/20 border border-amber-500/20 text-amber-400 font-bold text-[10px] uppercase px-2.5 py-1 rounded-xl flex items-center gap-1"
+                          >
+                            <Award className="w-3 h-3 text-amber-500" />
+                            <span>Editar Atributos</span>
+                          </button>
+                        </div>
+                        
+                        {/* Golden FIFA Ultimate Team Card visual */}
+                        <div className="w-52 h-80 bg-gradient-to-b from-amber-200/90 via-yellow-100/80 to-amber-300/90 border-4 border-amber-400/80 rounded-[1.75rem] p-3 flex flex-col justify-between shadow-2xl relative text-slate-950 select-none transform transition-transform group-hover:scale-[1.02] duration-200">
+                          <div className="absolute inset-0 bg-gradient-to-b from-amber-400/10 to-transparent pointer-events-none" />
+                          <div className="flex justify-between items-start mt-1">
+                            {/* Rating / Position */}
+                            <div className="flex flex-col items-center leading-none mt-1">
+                              <span className="text-3xl font-extrabold font-mono tracking-tight text-amber-950">{currentStats.rating_general}</span>
+                              <span className="text-[9px] font-black uppercase text-amber-800 tracking-wider mt-0.5">
+                                {selectedPlayerProfile.posicion.substring(0, 3)}
+                              </span>
+                              <div className="w-6 h-6 rounded-full bg-slate-900 text-amber-300 flex items-center justify-center font-bold text-[6px] border border-amber-400/50 mt-3 shadow">
+                                UDLP
+                              </div>
+                            </div>
+                            
+                            {/* Cutout Photo */}
+                            <div className="w-24 h-24 bg-gradient-to-b from-amber-100/20 to-amber-300/40 border border-amber-300/30 rounded-xl overflow-hidden flex items-center justify-center shadow-inner relative">
+                              {selectedPlayerProfile.foto_url ? (
+                                <img src={selectedPlayerProfile.foto_url} alt={selectedPlayerProfile.nombre} className="w-full h-full object-cover scale-105" />
+                              ) : (
+                                <Users className="w-10 h-10 text-amber-900/30" />
+                              )}
+                            </div>
+                          </div>
+
+                          <div className="text-center mt-1 border-b border-amber-950/20 pb-1">
+                            <h4 className="text-xs font-black uppercase tracking-tight text-amber-950 truncate">
+                              {selectedPlayerProfile.nombre}
+                            </h4>
+                          </div>
+
+                          {/* 6 Core attributes */}
+                          <div className="grid grid-cols-2 gap-x-2.5 gap-y-0.5 text-[9px] px-1 pb-1">
+                            <div className="flex justify-between border-b border-amber-950/10 py-0.5">
+                              <span className="text-amber-900/80 font-semibold">RIT</span>
+                              <strong className="text-slate-950 font-mono font-bold">{currentStats.ritmo}</strong>
+                            </div>
+                            <div className="flex justify-between border-b border-amber-950/10 py-0.5">
+                              <span className="text-amber-900/80 font-semibold">REG</span>
+                              <strong className="text-slate-950 font-mono font-bold">{currentStats.regate}</strong>
+                            </div>
+                            <div className="flex justify-between border-b border-amber-950/10 py-0.5">
+                              <span className="text-amber-900/80 font-semibold">TIR</span>
+                              <strong className="text-slate-950 font-mono font-bold">{currentStats.tiro}</strong>
+                            </div>
+                            <div className="flex justify-between border-b border-amber-950/10 py-0.5">
+                              <span className="text-amber-900/80 font-semibold">DEF</span>
+                              <strong className="text-slate-950 font-mono font-bold">{currentStats.defensa}</strong>
+                            </div>
+                            <div className="flex justify-between border-b border-amber-950/10 py-0.5">
+                              <span className="text-amber-900/80 font-semibold">PAS</span>
+                              <strong className="text-slate-950 font-mono font-bold">{currentStats.pase}</strong>
+                            </div>
+                            <div className="flex justify-between border-b border-amber-950/10 py-0.5">
+                              <span className="text-amber-900/80 font-semibold">FIS</span>
+                              <strong className="text-slate-950 font-mono font-bold">{currentStats.fisico}</strong>
+                            </div>
+                          </div>
+
+                          <div className="text-[6px] font-bold text-amber-800 text-center uppercase tracking-widest leading-none pb-1">
+                            U.D. LA POVEDA INFORME
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Scouting Evaluations Panel */}
+                    {profileAttributes.length > 0 && (
+                      <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-2xl space-y-4 mt-4 text-left">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                          <h5 className="text-[11px] text-emerald-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                            <Award className="w-4 h-4 text-emerald-500" />
+                            <span>Valoraciones de Captación y Scouting ({selectedPlayerProfile.posicion})</span>
+                          </h5>
+                          <span className="text-[10px] font-bold text-slate-500 uppercase">Escala 0-5</span>
+                        </div>
+                        
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-1">
+                          {/* Specific attributes of the demarcation */}
+                          <div className="space-y-3">
+                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">Específicos</span>
+                            {(POSITION_STRUCTURED_ATTRIBUTES[selectedPlayerProfile.posicion] || []).map(group => {
+                              const groupAttrs = profileAttributes.filter(a => group.items.includes(a.atributo));
+                              if (groupAttrs.length === 0) return null;
+                              return (
+                                <div key={group.category} className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
+                                  <span className="text-[9px] font-black text-emerald-500/80 uppercase tracking-widest block">{group.category}</span>
+                                  <div className="space-y-1.5">
+                                    {groupAttrs.map(attr => (
+                                      <div key={attr.atributo} className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-400 uppercase text-[10px] truncate max-w-[130px]">{attr.atributo}</span>
+                                        <span className={cn(
+                                          "font-black px-1.5 py-0.5 rounded text-[9px] min-w-[32px] text-center",
+                                          attr.valor === 0 && "text-red-500 bg-red-500/10",
+                                          attr.valor === 1 && "text-red-400 bg-red-400/10",
+                                          attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                                          attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                                          attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                                          attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
+                                        )}>{attr.valor}/5</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+
+                          {/* Common Attributes */}
+                          <div className="space-y-3">
+                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">Metodológicos</span>
+                            {COMMON_ATTRIBUTES.map(group => {
+                              const groupAttrs = profileAttributes.filter(a => group.items.includes(a.atributo));
+                              if (groupAttrs.length === 0) return null;
+                              return (
+                                <div key={group.category} className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
+                                  <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block">{group.category}</span>
+                                  <div className="space-y-1.5">
+                                    {groupAttrs.map(attr => (
+                                      <div key={attr.atributo} className="flex justify-between items-center text-xs">
+                                        <span className="text-slate-400 uppercase text-[10px] truncate max-w-[130px]">{attr.atributo}</span>
+                                        <span className={cn(
+                                          "font-black px-1.5 py-0.5 rounded text-[9px] min-w-[32px] text-center",
+                                          attr.valor === 0 && "text-red-500 bg-red-500/10",
+                                          attr.valor === 1 && "text-red-400 bg-red-400/10",
+                                          attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                                          attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                                          attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                                          attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
+                                        )}>{attr.valor}/5</span>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
-                </div>
-              </div>
+                );
+              })()}
 
               {/* Action bar inside profile */}
               <div className="pt-4 border-t border-slate-850 flex flex-wrap gap-2 justify-between">
@@ -720,8 +2483,7 @@ export default function Plantilla() {
                   {/* Print report button */}
                   <Button 
                     onClick={() => {
-                      window.focus();
-                      window.print();
+                      setShowPrintPreview(true);
                     }}
                     className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase rounded-xl px-4 py-2.5 flex items-center gap-1.5"
                   >
@@ -858,64 +2620,342 @@ export default function Plantilla() {
         </div>
       )}
 
+      {/* Print Preview Modal */}
+      {showPrintPreview && selectedPlayerProfile && (
+        <div className="fixed inset-0 z-[100] flex flex-col justify-start p-4 bg-black/90 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+          <div className="max-w-3xl w-full mx-auto my-auto space-y-4 pt-6 pb-12">
+            
+            {/* Header / Top controls */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-4 flex flex-wrap gap-3 items-center justify-between text-white shadow-2xl">
+              <div className="flex items-center gap-2">
+                <Printer className="w-5 h-5 text-blue-400 animate-pulse" />
+                <div className="text-left">
+                  <h4 className="font-extrabold text-sm uppercase tracking-wider text-slate-100">Vista Previa del Informe de Impresión</h4>
+                  <p className="text-[10px] text-slate-400">Jugador/a: <strong className="text-white">{selectedPlayerProfile.nombre} {selectedPlayerProfile.apellidos}</strong></p>
+                </div>
+              </div>
+              
+              <div className="flex gap-2">
+                <Button 
+                  onClick={() => {
+                    window.focus();
+                    window.print();
+                  }}
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase rounded-xl px-4 py-2 flex items-center gap-1.5 transition-all shadow-md"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span>Imprimir / Guardar PDF</span>
+                </Button>
+                <Button 
+                  variant="outline"
+                  onClick={() => setShowPrintPreview(false)}
+                  className="text-xs border-slate-800 text-slate-400 hover:text-white rounded-xl px-4 py-2"
+                >
+                  Cerrar Vista Previa
+                </Button>
+              </div>
+            </div>
+
+            {/* Iframe advice notice */}
+            <div className="bg-blue-950/40 border border-blue-900/30 rounded-2xl p-4 space-y-2 text-xs text-blue-300 text-left">
+              <span className="font-bold uppercase tracking-wider block text-[10px] text-blue-400">💡 Consejo de Impresión en Navegadores:</span>
+              <p className="leading-relaxed text-[11px]">
+                Los navegadores suelen bloquear la impresión integrada desde paneles reducidos (como el iframe de AI Studio). 
+                Si al pulsar <strong>"Imprimir / Guardar PDF"</strong> no se abre el diálogo de impresión, por favor haz clic en el botón <strong>"Abrir en pestaña nueva"</strong> situado en la esquina superior derecha del panel de desarrollo para usar la app en pantalla completa y poder imprimir sin restricciones de seguridad.
+              </p>
+            </div>
+
+            {/* Template Selector Tabs */}
+            <div className="bg-slate-900 border border-slate-800 rounded-3xl p-3 flex flex-col sm:flex-row items-center justify-between gap-3 text-white">
+              <span className="text-xs font-black uppercase tracking-wider text-slate-300 px-2">Seleccionar Tipo de Informe:</span>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPrintReportType('FUT')}
+                  className={`text-[11px] font-black uppercase py-2 px-4 rounded-xl transition-all ${
+                    printReportType === 'FUT' 
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/15' 
+                      : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  Ficha FIFA (Corto)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintReportType('DOSSIER')}
+                  className={`text-[11px] font-black uppercase py-2 px-4 rounded-xl transition-all ${
+                    printReportType === 'DOSSIER' 
+                      ? 'bg-emerald-500 text-slate-950 shadow-md shadow-emerald-500/15' 
+                      : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  Dossier Completo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrintReportType('BOTH')}
+                  className={`text-[11px] font-black uppercase py-2 px-4 rounded-xl transition-all ${
+                    printReportType === 'BOTH' 
+                      ? 'bg-gradient-to-r from-amber-500 to-emerald-500 text-slate-950 shadow-md' 
+                      : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  Ambos Informes
+                </button>
+              </div>
+            </div>
+
+            {/* On-Screen Document Previews */}
+            <div className="space-y-8">
+              {(printReportType === 'FUT' || printReportType === 'BOTH') && (
+                <div className="space-y-2">
+                  {printReportType === 'BOTH' && (
+                    <div className="flex justify-between items-center bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl">
+                      <span className="text-[10px] font-black uppercase text-amber-500">INFORME 1: FICHA TÉCNICA FIFA STYLE</span>
+                    </div>
+                  )}
+                  {/* The actual simulated paper document */}
+                  <div className="bg-[#030712] text-white p-6 sm:p-10 rounded-[2.5rem] shadow-2xl border border-slate-800 relative font-sans text-left overflow-hidden">
+                    {/* Subtle background cosmic mesh */}
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.15),transparent_60%)] pointer-events-none" />
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(239,68,68,0.1),transparent_60%)] pointer-events-none" />
+                    
+                    <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-8 items-center lg:items-stretch">
+                      
+                      {/* Left Column: The FIFA FUT Player Card */}
+                      <div className="lg:col-span-5 flex justify-center items-center">
+                        {(() => {
+                          const stats = getPlayerStats(selectedPlayerProfile);
+                          return <FUTPlayerCard player={selectedPlayerProfile} stats={stats} />;
+                        })()}
+                      </div>
+
+                      {/* Right Column: Extended Technical dossier */}
+                      <div className="lg:col-span-7 flex flex-col justify-between space-y-6">
+                        {(() => {
+                          const stats = getPlayerStats(selectedPlayerProfile);
+                          const age = selectedPlayerProfile.anio_nacimiento ? (2026 - parseInt(selectedPlayerProfile.anio_nacimiento as any)) : 15;
+                          return (
+                            <>
+                              {/* Dossier Header */}
+                              <div>
+                                <div className="flex items-center gap-2 text-amber-500 font-bold uppercase tracking-widest text-[10px] mb-1">
+                                  <span>U.D. LA POVEDA • ÁREA DE METODOLOGÍA</span>
+                                </div>
+                                <h2 className="text-3xl font-black uppercase tracking-tight text-white leading-none">
+                                  {selectedPlayerProfile.nombre} {selectedPlayerProfile.apellidos}
+                                </h2>
+                                <p className="text-xs font-bold text-slate-400 uppercase mt-1">
+                                  DORSAL #{selectedPlayerProfile.dorsal} • <span className="text-amber-400">{selectedPlayerProfile.posicion}</span> • {age} AÑOS
+                                </p>
+                                <div className="h-px bg-gradient-to-r from-slate-800 via-slate-800/40 to-transparent mt-4" />
+                              </div>
+
+                              {/* Extended Records Grids */}
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                {/* Block A: Personal details */}
+                                <div className="bg-slate-900/40 border border-slate-800/60 p-4 rounded-2xl space-y-2.5">
+                                  <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider border-b border-slate-800 pb-1.5">
+                                    DATOS PERSONALES
+                                  </h4>
+                                  <div className="text-xs space-y-1.5">
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Lateralidad:</span>
+                                      <strong className="text-white">{selectedPlayerProfile.lateralidad || 'Derecho'}</strong>
+                                    </p>
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Estado Físico:</span>
+                                      <span className={`font-extrabold px-2 py-0.5 rounded text-[10px] uppercase ${
+                                        selectedPlayerProfile.estado_fisico === 'Disponible' ? 'bg-emerald-500/10 text-emerald-400' :
+                                        selectedPlayerProfile.estado_fisico === 'Lesionado' ? 'bg-red-500/10 text-red-400' :
+                                        'bg-amber-500/10 text-amber-400'
+                                      }`}>
+                                        {selectedPlayerProfile.estado_fisico}
+                                      </span>
+                                    </p>
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Teléfono:</span>
+                                      <strong className="text-white">{selectedPlayerProfile.telefono || 'No registrado'}</strong>
+                                    </p>
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Email:</span>
+                                      <strong className="text-white truncate block max-w-[140px]">{selectedPlayerProfile.email || 'No registrado'}</strong>
+                                    </p>
+                                  </div>
+                                </div>
+
+                                {/* Block B: Performance stats */}
+                                <div className="bg-slate-900/40 border border-slate-800/60 p-4 rounded-2xl space-y-2.5">
+                                  <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider border-b border-slate-800 pb-1.5">
+                                    ESTADÍSTICAS COMPLETAS
+                                  </h4>
+                                  <div className="text-xs space-y-1.5">
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Partidos Disputados:</span>
+                                      <strong className="text-white">{stats.partidos_jugados}</strong>
+                                    </p>
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Minutos Totales:</span>
+                                      <strong className="text-white">{stats.minutos_jugados} min</strong>
+                                    </p>
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Goles Marcados:</span>
+                                      <strong className="text-emerald-400 font-bold">{stats.goles} goles</strong>
+                                    </p>
+                                    <p className="flex justify-between">
+                                      <span className="text-slate-400 font-semibold">Asistencia Entrenos:</span>
+                                      <strong className="text-amber-400">{stats.asistencia_entrenamientos}%</strong>
+                                    </p>
+                                  </div>
+                                </div>
+                              </div>
+
+                              {/* Block C: Scouting evaluation & Rating */}
+                              <div className="bg-slate-900/40 border border-slate-800/60 p-4 rounded-2xl space-y-3">
+                                <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+                                  <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider">
+                                    EVALUACIÓN METODOLÓGICA
+                                  </h4>
+                                  <span className="text-[10px] font-black px-2 py-0.5 bg-amber-400 text-slate-950 rounded uppercase tracking-wider">
+                                    VALORACIÓN GENERAL: {stats.rating_general}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-300 leading-relaxed italic">
+                                  "Jugador/a con una valoración general de {stats.rating_general} y una tasa de asistencia a entrenamientos del {stats.asistencia_entrenamientos}%. Demuestra un alto compromiso con el modelo de juego del club, excelente disciplina táctica en el terreno de juego, y un potencial físico-técnico sobresaliente según las mediciones registradas en el software."
+                                </p>
+                              </div>
+
+                              {/* Dossier Footer */}
+                              <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold uppercase tracking-widest pt-4 border-t border-slate-900">
+                                <span>U.D. LA POVEDA © 2026</span>
+                                <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {(printReportType === 'DOSSIER' || printReportType === 'BOTH') && (
+                <div className="space-y-2">
+                  {printReportType === 'BOTH' && (
+                    <div className="flex justify-between items-center bg-slate-900 border border-slate-800 px-4 py-2 rounded-xl mt-4">
+                      <span className="text-[10px] font-black uppercase text-emerald-500">INFORME 2: DOSSIER COMPLETO DE RENDIMIENTO (MULTIPLIEGO)</span>
+                    </div>
+                  )}
+                  <div className="p-1 sm:p-2 bg-slate-950 rounded-[2.5rem] border border-slate-850">
+                    <DetailedPerformanceDossier player={selectedPlayerProfile} stats={getPlayerStats(selectedPlayerProfile)} />
+                  </div>
+                </div>
+              )}
+            </div>
+
+          </div>
+        </div>
+      )}
+
       {/* Printable Area for Ficha Técnica (Portal-rendered at document.body for flawless printing) */}
       {selectedPlayerProfile && createPortal(
-        <div id="printable-player-report" className="print-only-container p-10 bg-white text-black min-h-screen">
-          <div className="max-w-3xl mx-auto border-4 border-double border-slate-400 p-8 rounded-3xl relative">
-            <div className="flex justify-between items-start border-b-2 border-black pb-6 mb-6">
-              <div className="flex gap-4 items-center">
-                <div className="w-20 h-20 bg-gray-100 border border-gray-300 rounded-xl overflow-hidden flex items-center justify-center">
-                  {selectedPlayerProfile.foto_url ? (
-                    <img src={selectedPlayerProfile.foto_url} alt={selectedPlayerProfile.nombre} className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="text-gray-400 text-3xl font-bold">UD</div>
-                  )}
-                </div>
-                <div>
-                  <h1 className="text-2xl font-black text-slate-900 uppercase">{selectedPlayerProfile.nombre} {selectedPlayerProfile.apellidos}</h1>
-                  <p className="text-xs font-bold text-blue-600 uppercase tracking-widest">{selectedPlayerProfile.posicion} • DORSAL {selectedPlayerProfile.dorsal}</p>
-                  <p className="text-[10px] font-bold text-gray-500 uppercase mt-0.5">U.D. LA POVEDA • INFORME TÉCNICO OFICIAL</p>
-                </div>
-              </div>
-              <div className="bg-slate-900 text-white font-mono font-black text-xl h-12 w-12 rounded-full flex items-center justify-center">
-                #{selectedPlayerProfile.dorsal}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-6 mb-8 text-xs">
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2">
-                <h3 className="font-extrabold text-slate-950 uppercase border-b border-gray-300 pb-1 text-[10px] tracking-wider">Datos Personales</h3>
-                <p><span className="text-gray-500 font-semibold">Año de Nacimiento:</span> <strong className="text-slate-900">{selectedPlayerProfile.anio_nacimiento || 'N/A'}</strong></p>
-                <p><span className="text-gray-500 font-semibold">Lateralidad:</span> <strong className="text-slate-900">{selectedPlayerProfile.lateralidad || 'Derecho'}</strong></p>
-                <p><span className="text-gray-500 font-semibold">Estado Físico:</span> <strong className="text-slate-900">{selectedPlayerProfile.estado_fisico}</strong></p>
-                <p><span className="text-gray-500 font-semibold">Teléfono:</span> <strong className="text-slate-900">{selectedPlayerProfile.telefono || 'No registrado'}</strong></p>
-                <p><span className="text-gray-500 font-semibold">Email:</span> <strong className="text-slate-900">{selectedPlayerProfile.email || 'No registrado'}</strong></p>
+        <div id="printable-player-report" className="print-only-container p-12 bg-[#030712] text-white min-h-screen relative font-sans">
+          {/* Subtle cosmic mesh for high-quality background prints */}
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_30%,rgba(59,130,246,0.12),transparent_60%)] pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(239,68,68,0.08),transparent_60%)] pointer-events-none" />
+          
+          {(printReportType === 'FUT' || printReportType === 'BOTH') && (
+            <div className="max-w-4xl mx-auto grid grid-cols-12 gap-8 items-center relative z-10 pt-8 min-h-screen page-break">
+              
+              {/* Left Column: Card */}
+              <div className="col-span-5 flex justify-center">
+                {(() => {
+                  const stats = getPlayerStats(selectedPlayerProfile);
+                  return <FUTPlayerCard player={selectedPlayerProfile} stats={stats} />;
+                })()}
               </div>
 
-              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-2">
-                <h3 className="font-extrabold text-slate-950 uppercase border-b border-gray-300 pb-1 text-[10px] tracking-wider">Rendimiento y Estadísticas</h3>
-                <p><span className="text-gray-500 font-semibold">Partidos Disputados:</span> <strong className="text-slate-900">14 partidos</strong></p>
-                <p><span className="text-gray-500 font-semibold">Goles Marcados:</span> <strong className="text-slate-900">{selectedPlayerProfile.posicion === 'DELANTERO' ? 9 : selectedPlayerProfile.posicion === 'EXTREMO' ? 6 : 1}</strong></p>
-                <p><span className="text-gray-500 font-semibold">Asistencias Realizadas:</span> <strong className="text-slate-900">5 asistencias</strong></p>
-                <p><span className="text-gray-500 font-semibold">Asistencia a Entrenamientos:</span> <strong className="text-slate-900">93% de las sesiones</strong></p>
-                <p><span className="text-gray-500 font-semibold">Valoración General:</span> <strong className="text-blue-600">8.5 / 10</strong></p>
-              </div>
-            </div>
+              {/* Right Column: Complete Stats Dossier */}
+              <div className="col-span-7 space-y-6 text-left">
+                {(() => {
+                  const stats = getPlayerStats(selectedPlayerProfile);
+                  const age = selectedPlayerProfile.anio_nacimiento ? (2026 - parseInt(selectedPlayerProfile.anio_nacimiento as any)) : 15;
+                  return (
+                    <>
+                      <div>
+                        <div className="text-amber-500 font-extrabold uppercase tracking-widest text-[10px] mb-1">
+                          U.D. LA POVEDA • ÁREA DE METODOLOGÍA
+                        </div>
+                        <h2 className="text-4xl font-black uppercase tracking-tight text-white leading-none">
+                          {selectedPlayerProfile.nombre} {selectedPlayerProfile.apellidos}
+                        </h2>
+                        <p className="text-xs font-bold text-slate-400 uppercase mt-1">
+                          DORSAL #{selectedPlayerProfile.dorsal} • <span className="text-amber-400">{selectedPlayerProfile.posicion}</span> • {age} AÑOS
+                        </p>
+                        <div className="h-px bg-slate-800 mt-4" />
+                      </div>
 
-            <div className="space-y-4 text-xs">
-              <div className="border-t border-gray-300 pt-4">
-                <h3 className="font-extrabold text-slate-900 uppercase text-[10px] tracking-wider mb-1">Evaluación Técnica del Entrenador</h3>
-                <p className="text-gray-600 leading-relaxed italic">
-                  "Jugadora con gran disciplina táctica, excelente toma de decisiones bajo presión y un compromiso de asistencia de entrenamiento excelente. Muestra gran proyección y adaptabilidad al modelo de juego."
-                </p>
-              </div>
-            </div>
+                      <div className="grid grid-cols-2 gap-4">
+                        {/* Block A */}
+                        <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl space-y-2.5">
+                          <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider border-b border-slate-800 pb-1.5">
+                            DATOS PERSONALES
+                          </h4>
+                          <div className="text-xs space-y-1.5">
+                            <p className="flex justify-between"><span className="text-slate-400">Lateralidad:</span> <strong className="text-white">{selectedPlayerProfile.lateralidad || 'Derecho'}</strong></p>
+                            <p className="flex justify-between"><span className="text-slate-400">Estado Físico:</span> <strong className="text-emerald-400">{selectedPlayerProfile.estado_fisico}</strong></p>
+                            <p className="flex justify-between"><span className="text-slate-400">Teléfono:</span> <strong className="text-white">{selectedPlayerProfile.telefono || 'No registrado'}</strong></p>
+                            <p className="flex justify-between"><span className="text-slate-400">Email:</span> <strong className="text-white truncate block max-w-[150px]">{selectedPlayerProfile.email || 'No registrado'}</strong></p>
+                          </div>
+                        </div>
 
-            <div className="mt-12 pt-6 border-t border-gray-200 flex justify-between items-center text-[10px] text-gray-400 font-bold uppercase tracking-wider">
-              <span>U.D. LA POVEDA © 2026</span>
-              <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+                        {/* Block B */}
+                        <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl space-y-2.5">
+                          <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider border-b border-slate-800 pb-1.5">
+                            ESTADÍSTICAS COMPLETAS
+                          </h4>
+                          <div className="text-xs space-y-1.5">
+                            <p className="flex justify-between"><span className="text-slate-400">Partidos Disputados:</span> <strong className="text-white">{stats.partidos_jugados}</strong></p>
+                            <p className="flex justify-between"><span className="text-slate-400">Minutos Jugados:</span> <strong className="text-white">{stats.minutos_jugados} min</strong></p>
+                            <p className="flex justify-between"><span className="text-slate-400">Goles Marcados:</span> <strong className="text-emerald-400 font-bold">{stats.goles} goles</strong></p>
+                            <p className="flex justify-between"><span className="text-slate-400">Asistencia Entrenos:</span> <strong className="text-amber-400">{stats.asistencia_entrenamientos}%</strong></p>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="bg-slate-900/60 border border-slate-800 p-4 rounded-2xl space-y-3">
+                        <div className="flex justify-between items-center border-b border-slate-800 pb-1.5">
+                          <h4 className="text-[10px] font-black uppercase text-amber-500 tracking-wider">
+                            EVALUACIÓN METODOLÓGICA
+                          </h4>
+                          <span className="text-[10px] font-black px-2 py-0.5 bg-amber-400 text-slate-950 rounded uppercase tracking-wider">
+                            VALORACIÓN GENERAL: {stats.rating_general}
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed italic">
+                          "Jugador/a con una valoración general de {stats.rating_general} y una tasa de asistencia a entrenamientos del {stats.asistencia_entrenamientos}%. Demuestra un alto compromiso con el modelo de juego del club, excelente disciplina táctica en el terreno de juego, y un potencial físico-técnico sobresaliente según las mediciones registradas en el software."
+                        </p>
+                      </div>
+
+                      <div className="flex justify-between items-center text-[9px] text-slate-500 font-bold uppercase tracking-widest pt-4 border-t border-slate-900">
+                        <span>U.D. LA POVEDA © 2026</span>
+                        <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+
             </div>
-          </div>
+          )}
+
+          {(printReportType === 'DOSSIER' || printReportType === 'BOTH') && (
+            <div className="max-w-5xl mx-auto">
+              <DetailedPerformanceDossier player={selectedPlayerProfile} stats={getPlayerStats(selectedPlayerProfile)} />
+            </div>
+          )}
+
         </div>,
         document.body
       )}
@@ -927,9 +2967,9 @@ export default function Plantilla() {
         }
         @media print {
           html, body {
-            background-color: white !important;
-            background: white !important;
-            color: black !important;
+            background-color: #030712 !important;
+            background: #030712 !important;
+            color: white !important;
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
           }
@@ -938,13 +2978,18 @@ export default function Plantilla() {
           }
           .print-only-container {
             display: block !important;
-            background: white !important;
-            color: black !important;
-            padding: 20px !important;
+            background-color: #030712 !important;
+            background: #030712 !important;
+            color: white !important;
+            padding: 40px !important;
+          }
+          .page-break {
+            page-break-after: always;
+            break-after: page;
           }
           @page {
-            size: portrait;
-            margin: 15mm;
+            size: landscape;
+            margin: 10mm;
           }
         }
       `}</style>
