@@ -77,8 +77,8 @@ export interface Coach {
 }
 
 export const CLUB_TEAMS = [
-  'SENIOR MASCULINO',
   'SENIOR FEMENINO',
+  'SENIOR MASCULINO',
   'JUVENIL A',
   'JUVENIL B',
   'CADETE A',

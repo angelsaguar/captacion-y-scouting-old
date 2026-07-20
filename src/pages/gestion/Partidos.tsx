@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { CLUB_TEAMS } from '@/types';
+import UDLaPovedaLogo from '@/components/layout/UDLaPovedaLogo';
 import { 
   Trophy, 
   Plus, 
@@ -501,9 +502,15 @@ export default function Partidos() {
                 <div className="flex items-center justify-around py-2">
                   {/* Home Team */}
                   <div className="flex flex-col items-center gap-1.5 w-1/3 text-center">
-                    <div className="w-10 h-10 bg-white p-1 rounded-xl flex items-center justify-center shadow-lg">
-                      <img src="/escudo.png" alt="UD La Poveda" className="w-full h-full object-contain" onError={(e) => { (e.target as HTMLElement).style.display = 'none'; }} />
-                    </div>
+                    {match.tipo === 'Local' ? (
+                      <div className="w-10 h-10 bg-white p-1 rounded-xl flex items-center justify-center shadow-lg">
+                        <UDLaPovedaLogo className="w-full h-full" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-center shadow-md">
+                        <Trophy className="w-5 h-5 text-slate-500" />
+                      </div>
+                    )}
                     <span className="font-extrabold text-white text-xs uppercase truncate max-w-full">
                       {match.tipo === 'Local' ? 'LA POVEDA' : match.rival}
                     </span>
@@ -534,9 +541,15 @@ export default function Partidos() {
 
                   {/* Away Team */}
                   <div className="flex flex-col items-center gap-1.5 w-1/3 text-center">
-                    <div className="w-10 h-10 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-center">
-                      <Trophy className="w-5 h-5 text-slate-600" />
-                    </div>
+                    {match.tipo === 'Local' ? (
+                      <div className="w-10 h-10 bg-slate-950 border border-slate-850 rounded-xl flex items-center justify-center shadow-md">
+                        <Trophy className="w-5 h-5 text-slate-500" />
+                      </div>
+                    ) : (
+                      <div className="w-10 h-10 bg-white p-1 rounded-xl flex items-center justify-center shadow-lg">
+                        <UDLaPovedaLogo className="w-full h-full" />
+                      </div>
+                    )}
                     <span className="font-extrabold text-white text-xs uppercase truncate max-w-full">
                       {match.tipo === 'Local' ? match.rival : 'LA POVEDA'}
                     </span>

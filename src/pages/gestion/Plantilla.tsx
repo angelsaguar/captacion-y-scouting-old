@@ -1752,16 +1752,14 @@ function FUTPlayerCard({ player, stats }: { player: TeamPlayer; stats: any }) {
           </div>
 
           {/* Center: Cutout Player Photo */}
-          <div className="absolute left-1/2 -translate-x-1/2 w-40 h-40 overflow-hidden flex items-end justify-center">
+          <div className="absolute left-1/2 -translate-x-1/2 top-4 w-28 h-28 rounded-full border-2 border-amber-400/40 overflow-hidden flex items-center justify-center shadow-xl bg-slate-950 z-20">
             {player.foto_url ? (
-              <img src={player.foto_url} alt={player.nombre} referrerPolicy="no-referrer" className="w-full h-full object-cover object-top scale-105" />
+              <img src={player.foto_url} alt={player.nombre} referrerPolicy="no-referrer" className="w-full h-full object-cover object-center" />
             ) : (
-              <div className="w-24 h-24 rounded-full bg-slate-900 border border-slate-800 flex items-center justify-center mb-2">
-                <Users className="w-12 h-12 text-slate-700" />
+              <div className="w-full h-full bg-slate-900 flex items-center justify-center">
+                <Users className="w-10 h-10 text-slate-700" />
               </div>
             )}
-            {/* Fade overlay */}
-            <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-t from-[#020514] to-transparent pointer-events-none" />
           </div>
 
           {/* Top Right: Custom Club Crest Shield */}
@@ -2006,6 +2004,31 @@ export default function Plantilla() {
   // 3-evaluations state and period selector
   const [evaluations, setEvaluations] = useState<Record<string, Record<string, any>>>({});
   const [selectedPeriod, setSelectedPeriod] = useState<'Septiembre' | 'Diciembre' | 'Mayo'>('Septiembre');
+  const [comparePeriods, setComparePeriods] = useState<('Septiembre' | 'Diciembre' | 'Mayo')[]>(['Septiembre', 'Diciembre', 'Mayo']);
+
+  const toggleComparePeriod = (period: 'Septiembre' | 'Diciembre' | 'Mayo') => {
+    if (comparePeriods.includes(period)) {
+      if (comparePeriods.length > 1) {
+        setComparePeriods(comparePeriods.filter(p => p !== period));
+      } else {
+        toast.error('Debes tener al menos un período seleccionado para comparar.');
+      }
+    } else {
+      setComparePeriods([...comparePeriods, period]);
+    }
+  };
+
+  const getAttributeValueForPeriod = (playerId: string, period: 'Septiembre' | 'Diciembre' | 'Mayo', attrName: string) => {
+    const periodEvalAttr = evaluations[playerId]?.[period]?.attributes?.[attrName];
+    if (typeof periodEvalAttr === 'number') {
+      return periodEvalAttr;
+    }
+    const baseAttr = profileAttributes.find(a => a.atributo === attrName);
+    if (baseAttr) {
+      return baseAttr.valor;
+    }
+    return 0;
+  };
 
   const getPlayerComparisonData = (playerId: string) => {
     const player = players.find(p => p.id === playerId);
@@ -3845,12 +3868,36 @@ export default function Plantilla() {
 
                     {/* COMPARATIVE PROGRESSION CHART */}
                     <div className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl space-y-4 mt-4">
-                      <div className="border-b border-slate-900 pb-2">
-                        <h5 className="text-[11px] text-blue-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                          <TrendingUp className="w-4 h-4 text-blue-400" />
-                          <span>Evolución Anual Comparativa (Septiembre vs Diciembre vs Mayo)</span>
-                        </h5>
-                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Progreso trimestral de atributos de rendimiento para {selectedPlayerProfile.nombre}</p>
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-slate-900 pb-3 gap-3">
+                        <div>
+                          <h5 className="text-[11px] text-blue-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                            <TrendingUp className="w-4 h-4 text-blue-400" />
+                            <span>Evolución Anual Comparativa</span>
+                          </h5>
+                          <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Progreso de atributos para {selectedPlayerProfile.nombre}</p>
+                        </div>
+                        {/* Period Selector Buttons */}
+                        <div className="flex items-center gap-1.5 self-start sm:self-auto flex-wrap">
+                          <span className="text-[9px] text-slate-400 font-bold uppercase mr-1">Periodos:</span>
+                          {(['Septiembre', 'Diciembre', 'Mayo'] as const).map(period => {
+                            const active = comparePeriods.includes(period);
+                            return (
+                              <button
+                                key={period}
+                                type="button"
+                                onClick={() => toggleComparePeriod(period)}
+                                className={cn(
+                                  "px-2.5 py-1 text-[9px] font-black uppercase rounded-lg border transition-all cursor-pointer",
+                                  active 
+                                    ? "bg-blue-600/10 text-blue-400 border-blue-500/40 shadow-sm"
+                                    : "bg-slate-950/40 text-slate-500 border-slate-850 hover:border-slate-800"
+                                )}
+                              >
+                                {period}
+                              </button>
+                            );
+                          })}
+                        </div>
                       </div>
 
                       <div className="h-56 w-full pt-2">
@@ -3908,13 +3955,117 @@ export default function Plantilla() {
                                 <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 100]} />
                                 <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff', fontSize: '10px' }} />
                                 <Legend wrapperStyle={{ fontSize: 9 }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
-                                <Bar dataKey="Septiembre" fill="#3b82f6" radius={[3, 3, 0, 0]} />
-                                <Bar dataKey="Diciembre" fill="#f59e0b" radius={[3, 3, 0, 0]} />
-                                <Bar dataKey="Mayo" fill="#10b981" radius={[3, 3, 0, 0]} />
+                                {comparePeriods.includes('Septiembre') && <Bar dataKey="Septiembre" fill="#3b82f6" radius={[3, 3, 0, 0]} />}
+                                {comparePeriods.includes('Diciembre') && <Bar dataKey="Diciembre" fill="#f59e0b" radius={[3, 3, 0, 0]} />}
+                                {comparePeriods.includes('Mayo') && <Bar dataKey="Mayo" fill="#10b981" radius={[3, 3, 0, 0]} />}
                               </BarChart>
                             </ResponsiveContainer>
                           );
                         })()}
+                      </div>
+
+                      {/* TACTICAL ITEMS COMPARISON TABLE */}
+                      <div className="border-t border-slate-900 pt-4 space-y-3 text-left">
+                        <div>
+                          <h6 className="text-[10px] text-emerald-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                            <Award className="w-3.5 h-3.5 text-emerald-500" />
+                            <span>Progreso de Ítems Tácticos (Demarcación y Metodología)</span>
+                          </h6>
+                          <p className="text-[9px] text-slate-500 font-semibold uppercase mt-0.5">Comparativa directa de valoraciones tácticas de 0 a 5</p>
+                        </div>
+
+                        <div className="overflow-x-auto rounded-xl border border-slate-900 bg-slate-950/80">
+                          <table className="w-full text-left text-[11px] border-collapse min-w-[320px]">
+                            <thead>
+                              <tr className="bg-slate-900/60 border-b border-slate-900 text-slate-400 font-bold uppercase text-[9px] tracking-wider">
+                                <th className="py-2 px-3">Atributo</th>
+                                <th className="py-2 px-2 text-center">Tipo</th>
+                                {comparePeriods.includes('Septiembre') && <th className="py-2 px-2 text-center text-blue-400">Sep</th>}
+                                {comparePeriods.includes('Diciembre') && <th className="py-2 px-2 text-center text-amber-500">Dic</th>}
+                                {comparePeriods.includes('Mayo') && <th className="py-2 px-2 text-center text-emerald-400">May</th>}
+                                <th className="py-2 px-3 text-right">Progresión</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {(() => {
+                                const specificGroups = POSITION_STRUCTURED_ATTRIBUTES[selectedPlayerProfile.posicion] || [];
+                                const specificItems = specificGroups.flatMap(g => g.items.map(name => ({ name, type: 'Específico' })));
+                                const commonItems = COMMON_ATTRIBUTES.flatMap(g => g.items.map(name => ({ name, type: 'Metodológico' })));
+                                const allItems = [...specificItems, ...commonItems];
+
+                                return allItems.map((item, idx) => {
+                                  const valSep = getAttributeValueForPeriod(selectedPlayerProfile.id, 'Septiembre', item.name);
+                                  const valDic = getAttributeValueForPeriod(selectedPlayerProfile.id, 'Diciembre', item.name);
+                                  const valMay = getAttributeValueForPeriod(selectedPlayerProfile.id, 'Mayo', item.name);
+
+                                  const activeVals: number[] = [];
+                                  if (comparePeriods.includes('Septiembre')) activeVals.push(valSep);
+                                  if (comparePeriods.includes('Diciembre')) activeVals.push(valDic);
+                                  if (comparePeriods.includes('Mayo')) activeVals.push(valMay);
+
+                                  let trendText = '= Estable';
+                                  let trendColor = 'text-slate-500';
+                                  if (activeVals.length >= 2) {
+                                    const first = activeVals[0];
+                                    const last = activeVals[activeVals.length - 1];
+                                    const diff = last - first;
+                                    if (diff > 0) {
+                                      trendText = `+${diff.toFixed(0)} Mejora`;
+                                      trendColor = 'text-emerald-400 font-bold';
+                                    } else if (diff < 0) {
+                                      trendText = `${diff.toFixed(0)} Retroceso`;
+                                      trendColor = 'text-red-400 font-bold';
+                                    }
+                                  }
+
+                                  const getRatingBadgeClass = (val: number) => {
+                                    return cn(
+                                      "inline-block font-extrabold text-[9px] px-1.5 py-0.5 rounded-md min-w-[22px] text-center",
+                                      val === 0 && "text-red-500 bg-red-500/10",
+                                      val === 1 && "text-red-400 bg-red-400/10",
+                                      val === 2 && "text-orange-500 bg-orange-500/10",
+                                      val === 3 && "text-yellow-500 bg-yellow-500/10",
+                                      val === 4 && "text-blue-500 bg-blue-500/10",
+                                      val === 5 && "text-emerald-500 bg-emerald-500/10"
+                                    );
+                                  };
+
+                                  return (
+                                    <tr key={idx} className="border-b border-slate-900/40 hover:bg-slate-900/20 transition-colors">
+                                      <td className="py-1.5 px-3 text-white font-medium truncate max-w-[140px] uppercase text-[9px]">{item.name}</td>
+                                      <td className="py-1.5 px-2 text-center">
+                                        <span className={cn(
+                                          "text-[7px] font-bold uppercase px-1 py-0.5 rounded-full border",
+                                          item.type === 'Específico' ? "bg-emerald-500/5 text-emerald-400 border-emerald-500/10" : "bg-blue-500/5 text-blue-400 border-blue-500/10"
+                                        )}>
+                                          {item.type === 'Específico' ? 'ESP' : 'MET'}
+                                        </span>
+                                      </td>
+                                      {comparePeriods.includes('Septiembre') && (
+                                        <td className="py-1.5 px-2 text-center">
+                                          <span className={getRatingBadgeClass(valSep)}>{valSep}</span>
+                                        </td>
+                                      )}
+                                      {comparePeriods.includes('Diciembre') && (
+                                        <td className="py-1.5 px-2 text-center">
+                                          <span className={getRatingBadgeClass(valDic)}>{valDic}</span>
+                                        </td>
+                                      )}
+                                      {comparePeriods.includes('Mayo') && (
+                                        <td className="py-1.5 px-2 text-center">
+                                          <span className={getRatingBadgeClass(valMay)}>{valMay}</span>
+                                        </td>
+                                      )}
+                                      <td className={cn("py-1.5 px-3 text-right text-[9px]", trendColor)}>
+                                        {trendText}
+                                      </td>
+                                    </tr>
+                                  );
+                                });
+                              })()}
+                            </tbody>
+                          </table>
+                        </div>
                       </div>
                     </div>
                   </div>
