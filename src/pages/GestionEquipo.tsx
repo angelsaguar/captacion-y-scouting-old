@@ -10,7 +10,9 @@ import {
   HeartPulse, 
   Presentation,
   ChevronLeft,
-  LayoutGrid
+  LayoutGrid,
+  Dumbbell,
+  Scale
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
@@ -23,6 +25,8 @@ import PizarraTactica from './gestion/PizarraTactica';
 import Videoteca from './gestion/Videoteca';
 import Lesionados from './gestion/Lesionados';
 import PlanPartido from './gestion/PlanPartido';
+import PruebasFisicas from './gestion/PruebasFisicas';
+import Antropometria from './gestion/Antropometria';
 
 type ModuleKey = 
   | 'plantilla' 
@@ -32,7 +36,9 @@ type ModuleKey =
   | 'pizarra' 
   | 'videoteca' 
   | 'lesionados' 
-  | 'plan';
+  | 'plan'
+  | 'pruebas_fisicas'
+  | 'antropometria';
 
 interface ModuleConfig {
   key: ModuleKey;
@@ -119,6 +125,24 @@ export default function GestionEquipo() {
       color: 'text-orange-500',
       bgColor: 'bg-orange-500/10',
       borderColor: 'border-orange-500/20'
+    },
+    {
+      key: 'pruebas_fisicas',
+      title: 'PRUEBAS FÍSICAS',
+      subtext: 'CONTROL RENDIMIENTO',
+      icon: Dumbbell,
+      color: 'text-sky-400',
+      bgColor: 'bg-sky-400/10',
+      borderColor: 'border-sky-400/20'
+    },
+    {
+      key: 'antropometria',
+      title: 'ANTROPOMETRÍA',
+      subtext: 'COMPOSICIÓN CORPORAL',
+      icon: Scale,
+      color: 'text-amber-500',
+      bgColor: 'bg-amber-500/10',
+      borderColor: 'border-amber-500/20'
     }
   ];
 
@@ -140,6 +164,10 @@ export default function GestionEquipo() {
         return <Lesionados />;
       case 'plan':
         return <PlanPartido />;
+      case 'pruebas_fisicas':
+        return <PruebasFisicas />;
+      case 'antropometria':
+        return <Antropometria />;
       default:
         return null;
     }

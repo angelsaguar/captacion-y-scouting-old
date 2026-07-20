@@ -22,7 +22,8 @@ import {
   TrendingUp,
   Download,
   MessageSquare,
-  Mail
+  Mail,
+  Activity
 } from 'lucide-react';
 import { 
   Radar, 
@@ -35,7 +36,11 @@ import {
   Bar,
   XAxis,
   YAxis,
-  Tooltip
+  Tooltip,
+  LineChart,
+  Line,
+  CartesianGrid,
+  Legend
 } from 'recharts';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -60,6 +65,10 @@ export default function PlayerDetail() {
   const navigate = useNavigate();
   const [player, setPlayer] = useState<Player | null>(null);
   const [loading, setLoading] = useState(true);
+  
+  const [profileSubTab, setProfileSubTab] = useState<'antropo' | 'phys'>('antropo');
+  const [physicalTests, setPhysicalTests] = useState<any[]>([]);
+  const [antropometria, setAntropometria] = useState<any[]>([]);
 
   useEffect(() => {
     async function fetchPlayer() {
@@ -81,44 +90,267 @@ export default function PlayerDetail() {
     fetchPlayer();
   }, [id]);
 
+  useEffect(() => {
+    if (!player) return;
+
+    // Load Physical Tests
+    const savedPhys = localStorage.getItem('ud_poveda_physical_test_history');
+    if (savedPhys) {
+      try {
+        const parsedPhys = JSON.parse(savedPhys);
+        const playerPhys = parsedPhys.filter((r: any) => 
+          r.player_id === player.id || 
+          r.player_name.toLowerCase().trim() === `${player.nombre} ${player.apellidos}`.toLowerCase().trim()
+        );
+        setPhysicalTests(playerPhys.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Load Anthropometrics
+    const savedAntropo = localStorage.getItem('ud_poveda_anthropometric_history');
+    if (savedAntropo) {
+      try {
+        const parsedAntropo = JSON.parse(savedAntropo);
+        const playerAntropo = parsedAntropo.filter((r: any) => 
+          r.player_id === player.id || 
+          r.player_name.toLowerCase().trim() === `${player.nombre} ${player.apellidos}`.toLowerCase().trim()
+        );
+        setAntropometria(playerAntropo.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [player]);
+
   const exportToPDF = () => {
     if (!player) return;
     const doc = new jsPDF();
+    
+    // Header banner styling
+    doc.setFillColor(15, 23, 42); // slate-900
+    doc.rect(0, 0, 210, 40, 'F');
+    doc.setTextColor(255, 255, 255);
     doc.setFontSize(22);
-    doc.text(`Informe de Scouting: ${player.nombre} ${player.apellidos}`, 10, 20);
-    doc.setFontSize(14);
-    doc.text(`Posicion: ${player.posicion}`, 10, 30);
-    doc.text(`Equipo Procedencia: ${player.equipo_actual || '-'}`, 10, 40);
-    if (player.equipo_asignado) {
-      doc.text(`Equipo Asignado Club: ${player.equipo_asignado}`, 10, 48);
-    }
-    doc.text(`Potencial: ${player.potencial}/5`, 10, 56);
-    doc.text(`Estado: ${player.estado}`, 10, 64);
-    doc.text('Observaciones:', 10, 80);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('U.D. LA POVEDA • DOSSIER TÉCNICO', 15, 18);
     doc.setFontSize(10);
-    const splitObs = doc.splitTextToSize(player.observaciones || 'Sin observaciones', 180);
-    doc.text(splitObs, 10, 90);
-    doc.save(`Informe_${player.nombre}_${player.apellidos}.pdf`);
-    toast.success('PDF generado con éxito');
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(200, 200, 200);
+    doc.text(`Informe de Scouting generado el: ${format(new Date(), "d 'de' MMMM, yyyy", { locale: es })}`, 15, 28);
+    
+    // Amber decorative border line
+    doc.setFillColor(245, 158, 11); // amber-500
+    doc.rect(0, 40, 210, 3, 'F');
+    
+    // Left Column Info (General Data)
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(14);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('DATOS DE LA JUGADORA', 15, 55);
+    
+    doc.setFontSize(10);
+    doc.setFont('Helvetica', 'normal');
+    doc.text(`Nombre: ${player.nombre} ${player.apellidos}`, 15, 65);
+    doc.text(`Posición: ${player.posicion}`, 15, 72);
+    doc.text(`Año Nacimiento: ${player.anio_nacimiento || '-'}`, 15, 79);
+    doc.text(`Procedencia: ${player.equipo_actual || '-'}`, 15, 86);
+    doc.text(`Asignación Club: ${player.equipo_asignado || '-'}`, 15, 93);
+    doc.text(`Dorsal: ${player.dorsal || '-'}`, 15, 100);
+    doc.text(`Lateralidad: ${player.lateralidad || '-'}`, 15, 107);
+    
+    // Right Column Info (Scouting Status)
+    doc.setFontSize(14);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('ESTADO DE SCUTING', 115, 55);
+    doc.setFontSize(10);
+    doc.setFont('Helvetica', 'normal');
+    doc.text(`Estado: ${player.estado}`, 115, 65);
+    doc.text(`Potencial: ${player.potencial}/5 estrellas`, 115, 72);
+    doc.text(`Observador: ${player.observador || 'Técnicos del Club'}`, 115, 79);
+    if (player.telefono) {
+      doc.text(`Contacto (${player.contacto_tipo || 'Tutor'}): ${player.telefono}`, 115, 86);
+    }
+    if (player.email) {
+      doc.text(`Email: ${player.email}`, 115, 93);
+    }
+
+    doc.setDrawColor(226, 232, 240);
+    doc.line(15, 115, 195, 115);
+
+    // Section 2: Technical Observations
+    doc.setFontSize(13);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('OBSERVACIONES GENERALES', 15, 125);
+    doc.setFontSize(10);
+    doc.setFont('Helvetica', 'italic');
+    doc.setTextColor(71, 85, 105);
+    const splitObs = doc.splitTextToSize(player.observaciones || 'Sin observaciones registradas por los analistas.', 180);
+    doc.text(splitObs, 15, 133);
+
+    // Section 3: Anthropometrics History (Separated as requested)
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(13);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('CONTROL DE COMPOSICIÓN CORPORAL Y BIOMETRÍA', 15, 162);
+    doc.setFontSize(9);
+    doc.setFont('Helvetica', 'normal');
+    doc.setTextColor(100, 100, 100);
+    
+    let yPos = 172;
+    if (antropometria.length === 0) {
+      doc.text('No se han registrado controles antropométricos esta temporada.', 15, yPos);
+      yPos += 10;
+    } else {
+      // Table Header
+      doc.setFillColor(248, 250, 252);
+      doc.rect(15, yPos - 4, 180, 7, 'F');
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('Helvetica', 'bold');
+      doc.text('Fecha', 17, yPos + 1);
+      doc.text('Peso', 45, yPos + 1);
+      doc.text('Altura', 70, yPos + 1);
+      doc.text('IMC', 95, yPos + 1);
+      doc.text('% Grasa', 120, yPos + 1);
+      doc.text('% Músculo', 145, yPos + 1);
+      doc.text('Cintura', 170, yPos + 1);
+      
+      doc.setFont('Helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      
+      antropometria.forEach(r => {
+        yPos += 8;
+        if (yPos > 275) { doc.addPage(); yPos = 20; }
+        const heightM = r.height / 100;
+        const imc = r.weight && r.height ? (r.weight / (heightM * heightM)).toFixed(1) : '-';
+        doc.text(r.date, 17, yPos);
+        doc.text(`${r.weight || '-'} kg`, 45, yPos);
+        doc.text(`${r.height || '-'} cm`, 70, yPos);
+        doc.text(`${imc}`, 95, yPos);
+        doc.text(r.body_fat_pct ? `${r.body_fat_pct}%` : '-', 120, yPos);
+        doc.text(r.muscle_pct ? `${r.muscle_pct}%` : '-', 145, yPos);
+        doc.text(r.waist_cm ? `${r.waist_cm} cm` : '-', 170, yPos);
+      });
+      yPos += 12;
+    }
+
+    // Section 4: Physical Tests History
+    if (yPos > 245) { doc.addPage(); yPos = 20; }
+    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(13);
+    doc.setFont('Helvetica', 'bold');
+    doc.text('CONTROL DE RENDIMIENTO FÍSICO Y TEST DE VELOCIDAD', 15, yPos);
+    yPos += 10;
+
+    if (physicalTests.length === 0) {
+      doc.setFontSize(9);
+      doc.setFont('Helvetica', 'normal');
+      doc.setTextColor(100, 100, 100);
+      doc.text('No se han registrado test físicos de rendimiento esta temporada.', 15, yPos);
+    } else {
+      // Table Header
+      doc.setFillColor(248, 250, 252);
+      doc.rect(15, yPos - 4, 180, 7, 'F');
+      doc.setTextColor(15, 23, 42);
+      doc.setFont('Helvetica', 'bold');
+      doc.text('Fecha', 17, yPos + 1);
+      doc.text('Yo-Yo Test (m)', 50, yPos + 1);
+      doc.text('Yo-Yo Velocidad', 90, yPos + 1);
+      doc.text('Illinois Agility', 130, yPos + 1);
+      doc.text('Sprint 30m', 165, yPos + 1);
+      
+      doc.setFont('Helvetica', 'normal');
+      doc.setTextColor(71, 85, 105);
+      
+      physicalTests.forEach(r => {
+        yPos += 8;
+        if (yPos > 275) { doc.addPage(); yPos = 20; }
+        doc.text(r.date, 17, yPos);
+        doc.text(`${r.yoyo_m || '-'} m`, 50, yPos);
+        doc.text(r.yoyo_kmh ? `${r.yoyo_kmh} km/h` : '-', 90, yPos);
+        doc.text(r.illinois ? `${r.illinois} s` : '-', 130, yPos);
+        doc.text(r.vel30m ? `${r.vel30m} s` : '-', 165, yPos);
+      });
+    }
+
+    doc.save(`Informe_Completo_${player.nombre}_${player.apellidos}.pdf`);
+    toast.success('Dossier completo en PDF exportado con éxito');
   };
 
   const exportToExcel = () => {
     if (!player) return;
-    const data = [
+    
+    // General scouting worksheet data
+    const dataGeneral = [
       { Campo: 'Nombre', Valor: player.nombre },
       { Campo: 'Apellidos', Valor: player.apellidos },
-      { Campo: 'Posicion', Valor: player.posicion },
-      { Campo: 'Equipo Procedencia', Valor: player.equipo_actual },
-      { Campo: 'Equipo Asignado Club', Valor: player.equipo_asignado || '-' },
-      { Campo: 'Potencial', Valor: player.potencial },
-      { Campo: 'Estado', Valor: player.estado },
-      ... (player.attributes?.map(a => ({ Campo: a.atributo, Valor: a.valor })) || [])
+      { Campo: 'Posición', Valor: player.posicion },
+      { Campo: 'Procedencia', Valor: player.equipo_actual || '-' },
+      { Campo: 'Asignación Club', Valor: player.equipo_asignado || '-' },
+      { Campo: 'Potencial', Valor: `${player.potencial}/5` },
+      { Campo: 'Estado de Scouting', Valor: player.estado },
+      { Campo: 'Telf. Contacto', Valor: player.telefono || '-' },
+      { Campo: 'Email Contacto', Valor: player.email || '-' },
+      { Campo: 'Observaciones Scouting', Valor: player.observaciones || '' },
+      ... (player.attributes?.map(a => ({ Campo: `Atributo: ${a.atributo}`, Valor: a.valor })) || [])
     ];
-    const ws = XLSX.utils.json_to_sheet(data);
+
+    // Anthropometrics worksheet data
+    const dataAntropo = antropometria.map((r, idx) => {
+      const heightM = r.height / 100;
+      const imc = r.weight && r.height ? (r.weight / (heightM * heightM)).toFixed(1) : '-';
+      const icc = r.waist_cm && r.hip_cm ? (r.waist_cm / r.hip_cm).toFixed(2) : '-';
+      const fatKg = r.weight && r.body_fat_pct ? ((r.weight * r.body_fat_pct) / 100).toFixed(1) : '-';
+      const muscleKg = r.weight && r.muscle_pct ? ((r.weight * r.muscle_pct) / 100).toFixed(1) : '-';
+
+      return {
+        'Nº': idx + 1,
+        'Fecha Control': r.date,
+        'Peso (kg)': r.weight || '-',
+        'Altura (cm)': r.height || '-',
+        'IMC (kg/m²)': imc,
+        'Grasa (%)': r.body_fat_pct || '-',
+        'Grasa Est. (kg)': fatKg,
+        'Músculo (%)': r.muscle_pct || '-',
+        'Músculo Est. (kg)': muscleKg,
+        'Agua (%)': r.water_pct || '-',
+        'Envergadura (cm)': r.wingspan_cm || '-',
+        'Cintura (cm)': r.waist_cm || '-',
+        'Cadera (cm)': r.hip_cm || '-',
+        'Índice Cintura-Cadera': icc,
+        'Observaciones': r.notes || ''
+      };
+    });
+
+    // Physical Tests worksheet data
+    const dataPhys = physicalTests.map((r, idx) => ({
+      'Nº': idx + 1,
+      'Fecha Test': r.date,
+      'Yo-Yo Test (m)': r.yoyo_m || '-',
+      'Yo-Yo Max Speed (km/h)': r.yoyo_kmh || '-',
+      'Illinois Agility (s)': r.illinois || '-',
+      'Sprint 30m (s)': r.vel30m || '-',
+      'Observaciones': r.notes || ''
+    }));
+
     const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, "Jugador");
-    XLSX.writeFile(wb, `${player.nombre}_${player.apellidos}.xlsx`);
-    toast.success('Excel generado con éxito');
+    
+    const wsGen = XLSX.utils.json_to_sheet(dataGeneral);
+    XLSX.utils.book_append_sheet(wb, wsGen, "Ficha Técnica");
+
+    if (dataAntropo.length > 0) {
+      const wsAnt = XLSX.utils.json_to_sheet(dataAntropo);
+      XLSX.utils.book_append_sheet(wb, wsAnt, "Controles Antropométricos");
+    }
+
+    if (dataPhys.length > 0) {
+      const wsPhy = XLSX.utils.json_to_sheet(dataPhys);
+      XLSX.utils.book_append_sheet(wb, wsPhy, "Pruebas Físicas");
+    }
+
+    XLSX.writeFile(wb, `Dossier_UD_Poveda_${player.nombre}_${player.apellidos}.xlsx`);
+    toast.success('Excel multi-pestaña generado con éxito');
   };
 
   const calculateAverage = (attributes?: any[]) => {
@@ -408,6 +640,280 @@ export default function PlayerDetail() {
                   </div>
                 </div>
              </CardContent>
+          </Card>
+
+          {/* Control de Rendimiento y Biometría section */}
+          <Card className="premium-card text-left bg-slate-950/20 border border-slate-900 rounded-3xl overflow-hidden mt-8">
+            <CardHeader className="border-b border-slate-900 p-6 flex flex-col sm:flex-row justify-between sm:items-center gap-4 bg-slate-950/40">
+              <div className="space-y-1">
+                <CardTitle className="text-lg font-black text-white tracking-tight flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-amber-500" />
+                  <span>Control Biométrico y Rendimiento</span>
+                </CardTitle>
+                <CardDescription className="text-slate-400 text-xs font-bold uppercase">Historial segregado del inicio y desarrollo de temporada</CardDescription>
+              </div>
+
+              {/* Subtabs switches */}
+              <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 self-start sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setProfileSubTab('antropo')}
+                  className={cn(
+                    "text-[10px] font-black uppercase px-3.5 py-2 rounded-lg transition-all",
+                    profileSubTab === 'antropo'
+                      ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                      : "text-slate-400 hover:text-white"
+                  )}
+                >
+                  Antropometría
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setProfileSubTab('phys')}
+                  className={cn(
+                    "text-[10px] font-black uppercase px-3.5 py-2 rounded-lg transition-all",
+                    profileSubTab === 'phys'
+                      ? "bg-amber-500 text-slate-950 shadow-md font-black"
+                      : "text-slate-400 hover:text-white"
+                  )}
+                >
+                  Pruebas Físicas
+                </button>
+              </div>
+            </CardHeader>
+            <CardContent className="p-6">
+              
+              {/* Tab 1: Antropometria */}
+              {profileSubTab === 'antropo' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  {antropometria.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-slate-500 uppercase font-black border border-dashed border-slate-800 rounded-2xl">
+                      No hay registros de composición corporal para este jugador esta temporada.
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      
+                      {/* Latest Record Highlight Box */}
+                      {(() => {
+                        const latest = antropometria[antropometria.length - 1];
+                        const heightM = latest.height / 100;
+                        const imc = latest.weight && latest.height ? (latest.weight / (heightM * heightM)).toFixed(1) : '-';
+                        const icc = latest.waist_cm && latest.hip_cm ? (latest.waist_cm / latest.hip_cm).toFixed(2) : '-';
+                        const fatKg = latest.weight && latest.body_fat_pct ? ((latest.weight * latest.body_fat_pct) / 100).toFixed(1) : '-';
+                        const muscleKg = latest.weight && latest.muscle_pct ? ((latest.weight * latest.muscle_pct) / 100).toFixed(1) : '-';
+
+                        return (
+                          <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl space-y-4">
+                            <div className="flex justify-between items-center border-b border-slate-850 pb-2">
+                              <span className="text-[10px] text-amber-500 font-black uppercase tracking-widest">Último Control Antropométrico ({latest.date})</span>
+                              <span className="text-xs text-slate-400 font-bold uppercase">{latest.notes || 'Composición Corporal'}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Peso</span>
+                                <div className="text-lg font-black text-white mt-0.5">{latest.weight || '-'} kg</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Altura</span>
+                                <div className="text-lg font-black text-white mt-0.5">{latest.height || '-'} cm</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">IMC</span>
+                                <div className="text-lg font-black text-purple-400 mt-0.5">{imc}</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Envergadura</span>
+                                <div className="text-lg font-black text-white mt-0.5">{latest.wingspan_cm || '-'} cm</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">% Grasa Corporal</span>
+                                <div className="text-lg font-black text-red-400 mt-0.5">{latest.body_fat_pct ? `${latest.body_fat_pct}%` : '-'}</div>
+                                {fatKg !== '-' && <span className="text-[9px] text-slate-500 font-bold uppercase mt-0.5 block">{fatKg} kg estim.</span>}
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">% Masa Muscular</span>
+                                <div className="text-lg font-black text-emerald-400 mt-0.5">{latest.muscle_pct ? `${latest.muscle_pct}%` : '-'}</div>
+                                {muscleKg !== '-' && <span className="text-[9px] text-slate-500 font-bold uppercase mt-0.5 block">{muscleKg} kg estim.</span>}
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">% Agua</span>
+                                <div className="text-lg font-black text-blue-400 mt-0.5">{latest.water_pct ? `${latest.water_pct}%` : '-'}</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">ICC (Cintura/Cadera)</span>
+                                <div className="text-lg font-black text-amber-500 mt-0.5">{icc}</div>
+                                <span className="text-[9px] text-slate-500 font-bold block mt-0.5">{latest.waist_cm || '-'}/{latest.hip_cm || '-'} cm</span>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Mini Progression Charts */}
+                      {antropometria.length >= 2 && (
+                        <div className="bg-slate-900/20 border border-slate-800/80 p-5 rounded-2xl space-y-3">
+                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Historial Gráfico Composición</span>
+                          <div className="h-44 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={antropometria.map(r => {
+                                const heightM = r.height / 100;
+                                return {
+                                  fecha: r.date,
+                                  'Peso (kg)': r.weight || null,
+                                  'Grasa (%)': r.body_fat_pct || null,
+                                  'Músculo (%)': r.muscle_pct || null
+                                };
+                              })}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                <XAxis dataKey="fecha" stroke="#64748b" tick={{ fontSize: 9 }} />
+                                <YAxis stroke="#64748b" tick={{ fontSize: 9 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', fontSize: 10 }} />
+                                <Legend wrapperStyle={{ fontSize: 9 }} />
+                                <Line type="monotone" dataKey="Peso (kg)" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} />
+                                <Line type="monotone" dataKey="Grasa (%)" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} />
+                                <Line type="monotone" dataKey="Músculo (%)" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Complete List Table */}
+                      <div className="border border-slate-850 rounded-xl overflow-hidden bg-slate-950/40">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead>
+                            <tr className="bg-slate-900/60 font-black uppercase text-[9px] border-b border-slate-800 text-slate-400">
+                              <th className="p-3">Fecha</th>
+                              <th className="p-3 text-center">Peso</th>
+                              <th className="p-3 text-center">Altura</th>
+                              <th className="p-3 text-center">Grasa %</th>
+                              <th className="p-3 text-center">Músculo %</th>
+                              <th className="p-3 text-center">Cintura</th>
+                              <th className="p-3 text-center">Cadera</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-900/50">
+                            {antropometria.map((r) => (
+                              <tr key={r.date} className="hover:bg-slate-900/20 font-medium">
+                                <td className="p-3 font-mono font-bold text-slate-400">{r.date}</td>
+                                <td className="p-3 text-center font-mono text-sky-400">{r.weight || '-'} kg</td>
+                                <td className="p-3 text-center font-mono">{r.height || '-'} cm</td>
+                                <td className="p-3 text-center font-mono text-red-400">{r.body_fat_pct ? `${r.body_fat_pct}%` : '-'}</td>
+                                <td className="p-3 text-center font-mono text-emerald-400">{r.muscle_pct ? `${r.muscle_pct}%` : '-'}</td>
+                                <td className="p-3 text-center font-mono">{r.waist_cm ? `${r.waist_cm} cm` : '-'}</td>
+                                <td className="p-3 text-center font-mono">{r.hip_cm ? `${r.hip_cm} cm` : '-'}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* Tab 2: Pruebas Fisicas */}
+              {profileSubTab === 'phys' && (
+                <div className="space-y-6 animate-in fade-in duration-200">
+                  {physicalTests.length === 0 ? (
+                    <div className="p-8 text-center text-xs text-slate-500 uppercase font-black border border-dashed border-slate-800 rounded-2xl">
+                      No hay registros de pruebas físicas de rendimiento para este jugador esta temporada.
+                    </div>
+                  ) : (
+                    <div className="space-y-6">
+                      
+                      {/* Latest Physical Test Highlight Box */}
+                      {(() => {
+                        const latest = physicalTests[physicalTests.length - 1];
+                        return (
+                          <div className="bg-slate-900/40 border border-slate-800 p-5 rounded-2xl space-y-4">
+                            <div className="flex justify-between items-center border-b border-slate-850 pb-2">
+                              <span className="text-[10px] text-amber-500 font-black uppercase tracking-widest">Último Test de Rendimiento ({latest.date})</span>
+                              <span className="text-xs text-slate-400 font-bold uppercase">{latest.notes || 'Rendimiento'}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Yo-Yo Test</span>
+                                <div className="text-lg font-black text-white mt-0.5">{latest.yoyo_m || '-'} m</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Yo-Yo Velocidad Máxima</span>
+                                <div className="text-lg font-black text-sky-400 mt-0.5">{latest.yoyo_kmh || '-'} km/h</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Illinois Agilidad</span>
+                                <div className="text-lg font-black text-red-400 mt-0.5">{latest.illinois || '-'} s</div>
+                              </div>
+                              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-850">
+                                <span className="text-[9px] text-slate-500 font-black uppercase">Sprint 30m</span>
+                                <div className="text-lg font-black text-emerald-400 mt-0.5">{latest.vel30m || '-'} s</div>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })()}
+
+                      {/* Mini Performance Progression Charts */}
+                      {physicalTests.length >= 2 && (
+                        <div className="bg-slate-900/20 border border-slate-800/80 p-5 rounded-2xl space-y-3">
+                          <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">Evolución de Velocidad y Resistencia</span>
+                          <div className="h-44 w-full">
+                            <ResponsiveContainer width="100%" height="100%">
+                              <LineChart data={physicalTests.map(r => ({
+                                fecha: r.date,
+                                'Yo-Yo (m)': r.yoyo_m || null,
+                                'Sprint 30m (s)': r.vel30m || null
+                              }))}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                <XAxis dataKey="fecha" stroke="#64748b" tick={{ fontSize: 9 }} />
+                                <YAxis stroke="#64748b" tick={{ fontSize: 9 }} />
+                                <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#1e293b', fontSize: 10 }} />
+                                <Legend wrapperStyle={{ fontSize: 9 }} />
+                                <Line type="monotone" dataKey="Yo-Yo (m)" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                                <Line type="monotone" dataKey="Sprint 30m (s)" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} />
+                              </LineChart>
+                            </ResponsiveContainer>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Physical Tests List Table */}
+                      <div className="border border-slate-850 rounded-xl overflow-hidden bg-slate-950/40">
+                        <table className="w-full text-left text-xs text-slate-300">
+                          <thead>
+                            <tr className="bg-slate-900/60 font-black uppercase text-[9px] border-b border-slate-800 text-slate-400">
+                              <th className="p-3">Fecha</th>
+                              <th className="p-3 text-center">Yo-Yo Distancia</th>
+                              <th className="p-3 text-center">Yo-Yo Vel. Máx.</th>
+                              <th className="p-3 text-center">Illinois Agilidad</th>
+                              <th className="p-3 text-center">Sprint 30m</th>
+                              <th className="p-3">Observaciones</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-900/50">
+                            {physicalTests.map((r) => (
+                              <tr key={r.date} className="hover:bg-slate-900/20 font-medium">
+                                <td className="p-3 font-mono font-bold text-slate-400">{r.date}</td>
+                                <td className="p-3 text-center font-mono text-emerald-400">{r.yoyo_m || '-'} m</td>
+                                <td className="p-3 text-center font-mono">{r.yoyo_kmh ? `${r.yoyo_kmh} km/h` : '-'}</td>
+                                <td className="p-3 text-center font-mono text-red-400">{r.illinois ? `${r.illinois} s` : '-'}</td>
+                                <td className="p-3 text-center font-mono text-blue-400">{r.vel30m ? `${r.vel30m} s` : '-'}</td>
+                                <td className="p-3 text-slate-450 truncate max-w-[150px]">{r.notes || ''}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                    </div>
+                  )}
+                </div>
+              )}
+
+            </CardContent>
           </Card>
         </div>
 

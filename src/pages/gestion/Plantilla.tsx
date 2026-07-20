@@ -24,7 +24,8 @@ import {
   Shield,
   Edit,
   Save,
-  Cloud
+  Cloud,
+  TrendingUp
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -78,8 +79,224 @@ interface TeamPlayer {
   rating_general?: number;
 }
 
-function DetailedPerformanceDossier({ player, stats }: { player: TeamPlayer; stats: any }) {
+function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player: TeamPlayer; stats: any; allPlayers?: TeamPlayer[] }) {
   const [attributes, setAttributes] = useState<{ atributo: string; valor: number }[]>([]);
+  const [physicalTests, setPhysicalTests] = useState<any[]>([]);
+  const [antropometria, setAntropometria] = useState<any[]>([]);
+  const [compareMetric, setCompareMetric] = useState<'yoyo_m' | 'yoyo_kmh' | 'illinois' | 'vel30m'>('yoyo_m');
+
+  useEffect(() => {
+    if (!player) return;
+
+    // Load Physical Tests
+    const savedPhys = localStorage.getItem('ud_poveda_physical_test_history');
+    if (savedPhys) {
+      try {
+        const parsedPhys = JSON.parse(savedPhys);
+        const playerPhys = parsedPhys.filter((r: any) => 
+          r.player_id === player.id || 
+          (r.player_name && r.player_name.toLowerCase().trim() === `${player.nombre} ${player.apellidos}`.toLowerCase().trim())
+        );
+        setPhysicalTests(playerPhys.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+
+    // Load Anthropometrics
+    const savedAntropo = localStorage.getItem('ud_poveda_anthropometric_history');
+    if (savedAntropo) {
+      try {
+        const parsedAntropo = JSON.parse(savedAntropo);
+        const playerAntropo = parsedAntropo.filter((r: any) => 
+          r.player_id === player.id || 
+          (r.player_name && r.player_name.toLowerCase().trim() === `${player.nombre} ${player.apellidos}`.toLowerCase().trim())
+        );
+        setAntropometria(playerAntropo.sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()));
+      } catch (e) {
+        console.error(e);
+      }
+    }
+  }, [player]);
+
+  const getPlayerEvaluations = () => {
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && key.startsWith('team_evaluations_')) {
+        const data = JSON.parse(localStorage.getItem(key) || '{}');
+        if (data[player.id]) {
+          return data[player.id];
+        }
+      }
+    }
+    return null;
+  };
+
+  const dossierEvals = getPlayerEvaluations();
+  const baseStatsForDossier = stats;
+
+  const getTeamComparisonData = () => {
+    if (!allPlayers || allPlayers.length === 0) return [];
+
+    let allPhysHistory: any[] = [];
+    const savedPhys = localStorage.getItem('ud_poveda_physical_test_history');
+    if (savedPhys) {
+      try {
+        allPhysHistory = JSON.parse(savedPhys);
+      } catch (e) {
+        console.error("Error parsing physical test history", e);
+      }
+    }
+
+    return allPlayers.map(p => {
+      const pTests = allPhysHistory.filter((r: any) => 
+        r.player_id === p.id || 
+        (r.player_name && r.player_name.toLowerCase().trim() === `${p.nombre} ${p.apellidos}`.toLowerCase().trim())
+      );
+
+      let latestVal = 0;
+      let isEstimated = false;
+
+      if (pTests.length > 0) {
+        const sorted = [...pTests].sort((a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime());
+        const latestRecord = sorted[sorted.length - 1];
+        
+        if (compareMetric === 'yoyo_m') latestVal = latestRecord.yoyo_m || 0;
+        else if (compareMetric === 'yoyo_kmh') latestVal = latestRecord.yoyo_kmh || 0;
+        else if (compareMetric === 'illinois') latestVal = latestRecord.illinois || 0;
+        else if (compareMetric === 'vel30m') latestVal = latestRecord.vel30m || 0;
+      } else {
+        isEstimated = true;
+        if (compareMetric === 'yoyo_m') latestVal = Math.round((p.fisico || 70) * 16);
+        else if (compareMetric === 'yoyo_kmh') latestVal = Number((12 + ((p.fisico || 70) * 0.05)).toFixed(1));
+        else if (compareMetric === 'illinois') latestVal = Number((19.5 - ((p.regate || 70) * 0.05)).toFixed(2));
+        else if (compareMetric === 'vel30m') latestVal = Number((5.1 - ((p.ritmo || 70) * 0.015)).toFixed(2));
+      }
+
+      return {
+        id: p.id,
+        fullName: `${p.nombre} ${p.apellidos}`,
+        displayName: `${p.nombre} ${p.apellidos.charAt(0)}.`,
+        value: Number(latestVal),
+        isCurrentPlayer: p.id === player.id,
+        isEstimated
+      };
+    });
+  };
+
+  const rawCompareData = getTeamComparisonData();
+  const isLowerBetter = compareMetric === 'illinois' || compareMetric === 'vel30m';
+  const sortedCompareData = [...rawCompareData].sort((a, b) => {
+    if (isLowerBetter) {
+      return a.value - b.value;
+    } else {
+      return b.value - a.value;
+    }
+  });
+
+  const currentPlayerIndex = sortedCompareData.findIndex(item => item.isCurrentPlayer);
+  const currentRank = currentPlayerIndex !== -1 ? currentPlayerIndex + 1 : 1;
+  const currentVal = rawCompareData.find(item => item.isCurrentPlayer)?.value || 0;
+
+  const validValues = rawCompareData.map(item => item.value).filter(val => val > 0);
+  const teamAverage = validValues.length > 0 
+    ? Number((validValues.reduce((sum, v) => sum + v, 0) / validValues.length).toFixed(1))
+    : 0;
+  
+  const bestValue = sortedCompareData[0]?.value || 0;
+  const bestPlayerName = sortedCompareData[0]?.fullName || 'N/A';
+
+  const deviation = Number((currentVal - teamAverage).toFixed(1));
+  const deviationText = deviation >= 0 
+    ? `+${deviation} (Por encima de la media)` 
+    : `${deviation} (Por debajo de la media)`;
+
+  const getMetricUnit = () => {
+    if (compareMetric === 'yoyo_m') return ' m';
+    if (compareMetric === 'yoyo_kmh') return ' km/h';
+    if (compareMetric === 'illinois') return ' s';
+    if (compareMetric === 'vel30m') return ' s';
+    return '';
+  };
+  
+  const getMetricName = () => {
+    if (compareMetric === 'yoyo_m') return 'Distancia Yo-Yo';
+    if (compareMetric === 'yoyo_kmh') return 'Velocidad Yo-Yo';
+    if (compareMetric === 'illinois') return 'Agilidad Illinois';
+    if (compareMetric === 'vel30m') return 'Sprint 30m';
+    return '';
+  };
+
+  const comparisonData = ['Septiembre', 'Diciembre', 'Mayo'].map(p => {
+    const evalData = dossierEvals?.[p];
+    if (evalData && evalData.stats) {
+      return {
+        name: p,
+        'Rating General': evalData.stats.rating_general !== undefined ? evalData.stats.rating_general : baseStatsForDossier.rating_general,
+        'Ritmo': evalData.stats.ritmo !== undefined ? evalData.stats.ritmo : baseStatsForDossier.ritmo,
+        'Tiro': evalData.stats.tiro !== undefined ? evalData.stats.tiro : baseStatsForDossier.tiro,
+        'Pase': evalData.stats.pase !== undefined ? evalData.stats.pase : baseStatsForDossier.pase,
+        'Regate': evalData.stats.regate !== undefined ? evalData.stats.regate : baseStatsForDossier.regate,
+        'Defensa': evalData.stats.defensa !== undefined ? evalData.stats.defensa : baseStatsForDossier.defensa,
+        'Físico': evalData.stats.fisico !== undefined ? evalData.stats.fisico : baseStatsForDossier.fisico,
+      };
+    }
+    return {
+      name: p,
+      'Rating General': baseStatsForDossier.rating_general || 75,
+      'Ritmo': baseStatsForDossier.ritmo || 70,
+      'Tiro': baseStatsForDossier.tiro || 65,
+      'Pase': baseStatsForDossier.pase || 70,
+      'Regate': baseStatsForDossier.regate || 70,
+      'Defensa': baseStatsForDossier.defensa || 60,
+      'Físico': baseStatsForDossier.fisico || 70,
+    };
+  });
+
+  const attributeProgressData = [
+    {
+      name: 'OVR (General)',
+      'Septiembre': comparisonData[0]?.['Rating General'] || 0,
+      'Diciembre': comparisonData[1]?.['Rating General'] || 0,
+      'Mayo': comparisonData[2]?.['Rating General'] || 0,
+    },
+    {
+      name: 'RIT (Ritmo)',
+      'Septiembre': comparisonData[0]?.['Ritmo'] || 0,
+      'Diciembre': comparisonData[1]?.['Ritmo'] || 0,
+      'Mayo': comparisonData[2]?.['Ritmo'] || 0,
+    },
+    {
+      name: 'TIR (Tiro)',
+      'Septiembre': comparisonData[0]?.['Tiro'] || 0,
+      'Diciembre': comparisonData[1]?.['Tiro'] || 0,
+      'Mayo': comparisonData[2]?.['Tiro'] || 0,
+    },
+    {
+      name: 'PAS (Pase)',
+      'Septiembre': comparisonData[0]?.['Pase'] || 0,
+      'Diciembre': comparisonData[1]?.['Pase'] || 0,
+      'Mayo': comparisonData[2]?.['Pase'] || 0,
+    },
+    {
+      name: 'REG (Regate)',
+      'Septiembre': comparisonData[0]?.['Regate'] || 0,
+      'Diciembre': comparisonData[1]?.['Regate'] || 0,
+      'Mayo': comparisonData[2]?.['Regate'] || 0,
+    },
+    {
+      name: 'DEF (Defensa)',
+      'Septiembre': comparisonData[0]?.['Defensa'] || 0,
+      'Diciembre': comparisonData[1]?.['Defensa'] || 0,
+      'Mayo': comparisonData[2]?.['Defensa'] || 0,
+    },
+    {
+      name: 'FIS (Físico)',
+      'Septiembre': comparisonData[0]?.['Físico'] || 0,
+      'Diciembre': comparisonData[1]?.['Físico'] || 0,
+      'Mayo': comparisonData[2]?.['Físico'] || 0,
+    },
+  ];
 
   useEffect(() => {
     const loadAttrs = async () => {
@@ -871,6 +1088,555 @@ function DetailedPerformanceDossier({ player, stats }: { player: TeamPlayer; sta
         </div>
       </div>
 
+      {/* PAGE 7: HISTORIAL DE VALORACIONES (SEPTIEMBRE, DICIEMBRE, MAYO) */}
+      <div className="min-h-[1100px] bg-slate-950 p-10 flex flex-col justify-between border-4 border-double border-slate-900 rounded-[2.5rem] relative shadow-2xl overflow-hidden mt-10 print:mt-0 print:border-0 print:shadow-none break-before-page" style={{ breakBefore: 'page' }}>
+        {/* Subtle decorative stadium grid in background */}
+        <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:16px_16px]" />
+        
+        <div className="space-y-8 relative z-10">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
+            <div className="space-y-1">
+              <span className="text-[10px] text-amber-500 font-black tracking-widest uppercase block">INFORME DE RENDIMIENTO</span>
+              <h2 className="text-3xl font-black text-white tracking-tight uppercase">07. COMPARATIVA TRIMESTRAL</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase">U.D. LA POVEDA • HISTORIAL DE VALORACIONES ANUALES</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-black text-slate-600 block uppercase">PÁGINA 7 DE 8</span>
+              <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mt-1.5 inline-block">Sincronizado</span>
+            </div>
+          </div>
+
+          {/* Subtitle / Context */}
+          <div className="bg-slate-900/40 border border-slate-900 p-4 rounded-2xl">
+            <p className="text-xs text-slate-400 leading-relaxed font-medium">
+              Esta sección presenta la evolución detallada de la jugadora a lo largo de los tres periodos de valoración de la temporada: <strong className="text-amber-500">Septiembre</strong>, <strong className="text-amber-500">Diciembre</strong> y <strong className="text-amber-500">Mayo</strong>. Permite analizar de forma objetiva las tendencias de progreso, la asimilación táctica y el desarrollo físico continuado.
+            </p>
+          </div>
+
+          {/* Graphic Section */}
+          <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl text-left">
+            <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-1.5 border-b border-slate-900 pb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span>EVOLUCIÓN GRÁFICA DE ATRIBUTOS CLAVE</span>
+            </h4>
+            <div className="h-64 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={attributeProgressData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                  <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} fontWeight="black" />
+                  <YAxis stroke="#64748b" fontSize={11} tickLine={false} domain={[0, 100]} fontWeight="black" />
+                  <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', color: '#fff', fontSize: '11px' }} />
+                  <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} formatter={(v) => <span className="text-white font-black px-1">{v}</span>} />
+                  <Bar dataKey="Septiembre" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Diciembre" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar dataKey="Mayo" fill="#10b981" radius={[4, 4, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Table Section */}
+          <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl text-left">
+            <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-1.5 border-b border-slate-900 pb-2">
+              <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
+              <span>TABLA DE DATOS COMPARATIVA</span>
+            </h4>
+            <div className="overflow-hidden border border-slate-900 rounded-xl bg-slate-950">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="bg-slate-900 text-slate-400 font-black uppercase text-[10px] tracking-wider border-b border-slate-900">
+                    <th className="py-2.5 px-4">PERIODO</th>
+                    <th className="py-2.5 px-3 text-center text-red-400">OVR</th>
+                    <th className="py-2.5 px-3 text-center text-blue-400">RIT</th>
+                    <th className="py-2.5 px-3 text-center text-amber-400">TIR</th>
+                    <th className="py-2.5 px-3 text-center text-emerald-400">PAS</th>
+                    <th className="py-2.5 px-3 text-center text-pink-400">REG</th>
+                    <th className="py-2.5 px-3 text-center text-purple-400">DEF</th>
+                    <th className="py-2.5 px-3 text-center text-teal-400">FIS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-900/60 font-medium">
+                  {comparisonData.map((row, idx) => (
+                    <tr key={idx} className="hover:bg-slate-900/20">
+                      <td className="py-2.5 px-4 font-black text-white uppercase text-[11px]">{row.name}</td>
+                      <td className="py-2.5 px-3 text-center font-black text-red-400 text-sm">{row['Rating General']}</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-white">{row['Ritmo']}</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-white">{row['Tiro']}</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-white">{row['Pase']}</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-white">{row['Regate']}</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-white">{row['Defensa']}</td>
+                      <td className="py-2.5 px-3 text-center font-mono text-white">{row['Físico']}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA © 2026</span>
+          <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+        </div>
+      </div>
+
+      {/* PAGE 8: CONTROL BIOMÉTRICO Y RENDIMIENTO */}
+      <div className="min-h-[1100px] bg-slate-950 p-10 flex flex-col justify-between border-4 border-double border-slate-900 rounded-[2.5rem] relative shadow-2xl overflow-hidden mt-10 print:mt-0 print:border-0 print:shadow-none break-before-page" style={{ breakBefore: 'page' }}>
+        {/* Subtle decorative stadium grid in background */}
+        <div className="absolute inset-0 opacity-[0.015] pointer-events-none bg-[radial-gradient(#e2e8f0_1.5px,transparent_1.5px)] [background-size:16px_16px]" />
+        
+        <div className="space-y-8 relative z-10">
+          {/* Header */}
+          <div className="flex justify-between items-start border-b-2 border-slate-900 pb-5">
+            <div className="space-y-1">
+              <span className="text-[10px] text-amber-500 font-black tracking-widest uppercase block">ÁREA DE RENDIMIENTO</span>
+              <h2 className="text-3xl font-black text-white tracking-tight uppercase">08. CONTROL BIOMÉTRICO Y PRUEBAS FÍSICAS</h2>
+              <p className="text-xs text-slate-400 font-bold uppercase">U.D. LA POVEDA • HISTORIAL DE COMPOSICIÓN Y RENDIMIENTO FÍSICO</p>
+            </div>
+            <div className="text-right">
+              <span className="text-xs font-black text-slate-600 block uppercase">PÁGINA 8 DE 8</span>
+              <span className="text-[9px] text-emerald-500 font-bold uppercase tracking-wider bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/20 mt-1.5 inline-block">Sincronizado</span>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+            {/* Seccion Antropometria */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-amber-500 uppercase tracking-wider flex items-center justify-between border-b border-slate-900 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-blue-500" />
+                  <span>COMPOSICIÓN CORPORAL (ANTROPOMETRÍA)</span>
+                </div>
+              </h3>
+
+              {antropometria.length === 0 ? (
+                <div className="p-8 text-center text-xs text-slate-500 uppercase font-black border border-dashed border-slate-800 rounded-2xl bg-slate-900/10">
+                  No se registran datos de antropometría esta temporada.
+                </div>
+              ) : (
+                <div className="space-y-4 text-left">
+                  {/* Ultimo registro resumido */}
+                  {(() => {
+                    const latest = antropometria[antropometria.length - 1];
+                    const heightM = latest.height / 100;
+                    const imc = latest.weight && latest.height ? (latest.weight / (heightM * heightM)).toFixed(1) : '-';
+                    const fatKg = latest.weight && latest.body_fat_pct ? ((latest.weight * latest.body_fat_pct) / 100).toFixed(1) : '-';
+                    const muscleKg = latest.weight && latest.muscle_pct ? ((latest.weight * latest.muscle_pct) / 100).toFixed(1) : '-';
+                    
+                    return (
+                      <div className="bg-slate-900/60 border border-slate-900 p-4 rounded-xl grid grid-cols-3 gap-2">
+                        <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                          <span className="text-[9px] text-slate-500 font-black uppercase block">Peso</span>
+                          <span className="text-sm font-black text-white mt-1 block">{latest.weight || '-'} kg</span>
+                        </div>
+                        <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                          <span className="text-[9px] text-slate-500 font-black uppercase block">Altura</span>
+                          <span className="text-sm font-black text-white mt-1 block">{latest.height || '-'} cm</span>
+                        </div>
+                        <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                          <span className="text-[9px] text-slate-500 font-black uppercase block">IMC</span>
+                          <span className="text-sm font-black text-blue-400 mt-1 block">{imc}</span>
+                        </div>
+                        <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                          <span className="text-[9px] text-slate-500 font-black uppercase block">% Grasa</span>
+                          <span className="text-sm font-black text-red-400 mt-1 block">{latest.body_fat_pct ? `${latest.body_fat_pct}%` : '-'}</span>
+                          {fatKg !== '-' && <span className="text-[8px] text-slate-500 block mt-0.5">{fatKg} kg</span>}
+                        </div>
+                        <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                          <span className="text-[9px] text-slate-500 font-black uppercase block">% Músculo</span>
+                          <span className="text-sm font-black text-emerald-400 mt-1 block">{latest.muscle_pct ? `${latest.muscle_pct}%` : '-'}</span>
+                          {muscleKg !== '-' && <span className="text-[8px] text-slate-500 block mt-0.5">{muscleKg} kg</span>}
+                        </div>
+                        <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                          <span className="text-[9px] text-slate-500 font-black uppercase block">Cintura</span>
+                          <span className="text-sm font-black text-amber-500 mt-1 block">{latest.waist_cm ? `${latest.waist_cm} cm` : '-'}</span>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Tabla reducida */}
+                  <div className="overflow-hidden border border-slate-900 rounded-xl bg-slate-950 text-[10px]">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="bg-slate-900 text-slate-400 font-black uppercase text-[8px] tracking-wider border-b border-slate-900">
+                          <th className="py-2 px-3">Fecha</th>
+                          <th className="py-2 px-2 text-center">Peso</th>
+                          <th className="py-2 px-2 text-center">IMC</th>
+                          <th className="py-2 px-2 text-center">Grasa</th>
+                          <th className="py-2 px-2 text-center">Músculo</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-900/60 font-medium">
+                        {antropometria.slice(-5).map((row, idx) => {
+                          const heightM = row.height / 100;
+                          const imc = row.weight && row.height ? (row.weight / (heightM * heightM)).toFixed(1) : '-';
+                          return (
+                            <tr key={idx} className="hover:bg-slate-900/20">
+                              <td className="py-2 px-3 font-bold text-white">{row.date}</td>
+                              <td className="py-2 px-2 text-center text-slate-300">{row.weight ? `${row.weight} kg` : '-'}</td>
+                              <td className="py-2 px-2 text-center text-blue-400 font-bold">{imc}</td>
+                              <td className="py-2 px-2 text-center text-red-400 font-bold">{row.body_fat_pct ? `${row.body_fat_pct}%` : '-'}</td>
+                              <td className="py-2 px-2 text-center text-emerald-400 font-bold">{row.muscle_pct ? `${row.muscle_pct}%` : '-'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  {/* Gráfico de Análisis vs Referencia */}
+                  {antropometria.length > 0 && (() => {
+                    const latest = antropometria[antropometria.length - 1];
+                    const heightM = latest.height / 100;
+                    const imc = latest.weight && latest.height ? Number((latest.weight / (heightM * heightM)).toFixed(1)) : 0;
+                    const compChartData = [
+                      { name: '% Músculo', 'Jugador': latest.muscle_pct || 0, 'Ref. Óptimo': 45.0 },
+                      { name: '% Grasa', 'Jugador': latest.body_fat_pct || 0, 'Ref. Óptimo': 12.0 },
+                      { name: 'IMC (Índice)', 'Jugador': imc, 'Ref. Óptimo': 21.5 }
+                    ];
+                    return (
+                      <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">Composición Corporal vs Referencia Óptima</span>
+                        <div className="h-32 w-full font-mono">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <BarChart data={compChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                              <XAxis dataKey="name" stroke="#64748b" fontSize={8} tickLine={false} />
+                              <YAxis stroke="#64748b" fontSize={8} domain={[0, 60]} tickLine={false} />
+                              <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
+                              <Legend wrapperStyle={{ fontSize: '8px' }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
+                              <Bar dataKey="Jugador" fill="#10b981" radius={[3, 3, 0, 0]} />
+                              <Bar dataKey="Ref. Óptimo" fill="#475569" radius={[3, 3, 0, 0]} />
+                            </BarChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    );
+                  })()}
+
+                  {/* Grafico de Evolución Temporal (solo si hay más de un registro) */}
+                  {antropometria.length >= 2 && (
+                    <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">Evolución Temporal de Composición</span>
+                      <div className="h-32 w-full font-mono">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={antropometria} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis dataKey="date" stroke="#64748b" fontSize={8} />
+                            <YAxis stroke="#64748b" fontSize={8} />
+                            <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
+                            <Line type="monotone" dataKey="weight" name="Peso (kg)" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line type="monotone" dataKey="body_fat_pct" name="Grasa (%)" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line type="monotone" dataKey="muscle_pct" name="Músculo (%)" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Seccion Pruebas Fisicas */}
+            <div className="space-y-4">
+              <h3 className="text-sm font-black text-amber-500 uppercase tracking-wider flex items-center justify-between border-b border-slate-900 pb-2">
+                <div className="flex items-center gap-2">
+                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                  <span>PRUEBAS FÍSICAS (TESTS DE RENDIMIENTO)</span>
+                </div>
+                {physicalTests.length === 0 && (
+                  <span className="text-[8px] bg-amber-500/10 text-amber-500 border border-amber-500/20 px-2 py-0.5 rounded uppercase font-black">
+                    Perfil Estimado
+                  </span>
+                )}
+              </h3>
+
+              {(() => {
+                const latestPhys = physicalTests.length > 0 ? physicalTests[physicalTests.length - 1] : {
+                  date: 'Ficha Técnica',
+                  yoyo_m: Math.round((stats.fisico || 70) * 16),
+                  yoyo_kmh: Number((12 + ((stats.fisico || 70) * 0.05)).toFixed(1)),
+                  illinois: Number((19.5 - ((stats.regate || 70) * 0.05)).toFixed(2)),
+                  vel30m: Number((5.1 - ((stats.ritmo || 70) * 0.015)).toFixed(2)),
+                  isEstimated: true
+                };
+
+                const rows = physicalTests.length > 0 ? physicalTests : [latestPhys];
+
+                const yoyoIndex = latestPhys.yoyo_m ? Math.round((latestPhys.yoyo_m / 1400) * 100) : 0;
+                const speedIndex = latestPhys.yoyo_kmh ? Math.round((latestPhys.yoyo_kmh / 14.5) * 100) : 0;
+                const agilIndex = latestPhys.illinois ? Math.round((17.5 / latestPhys.illinois) * 100) : 0;
+                const sprintIndex = latestPhys.vel30m ? Math.round((4.4 / latestPhys.vel30m) * 100) : 0;
+
+                const physicalProgressData = [
+                  { name: 'Resistencia (Endurance)', 'Jugador': yoyoIndex, 'Media Equipo': 100 },
+                  { name: 'Agilidad (Illinois)', 'Jugador': agilIndex, 'Media Equipo': 100 },
+                  { name: 'Velocidad (Sprint)', 'Jugador': sprintIndex, 'Media Equipo': 100 }
+                ];
+
+                return (
+                  <div className="space-y-4 text-left">
+                    {/* Ultimo registro resumido */}
+                    <div className="bg-slate-900/60 border border-slate-900 p-4 rounded-xl grid grid-cols-2 gap-2">
+                      <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                        <span className="text-[9px] text-slate-500 font-black uppercase block">Yo-Yo Test</span>
+                        <span className="text-sm font-black text-emerald-400 mt-1 block">{latestPhys.yoyo_m || '-'} m</span>
+                      </div>
+                      <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                        <span className="text-[9px] text-slate-500 font-black uppercase block">Velocidad Yo-Yo</span>
+                        <span className="text-sm font-black text-white mt-1 block">{latestPhys.yoyo_kmh ? `${latestPhys.yoyo_kmh} km/h` : '-'}</span>
+                      </div>
+                      <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                        <span className="text-[9px] text-slate-500 font-black uppercase block">Agilidad Illinois</span>
+                        <span className="text-sm font-black text-red-400 mt-1 block">{latestPhys.illinois ? `${latestPhys.illinois} s` : '-'}</span>
+                      </div>
+                      <div className="bg-slate-950/50 p-2.5 rounded border border-slate-900 text-center">
+                        <span className="text-[9px] text-slate-500 font-black uppercase block">Sprint 30m</span>
+                        <span className="text-sm font-black text-amber-500 mt-1 block">{latestPhys.vel30m ? `${latestPhys.vel30m} s` : '-'}</span>
+                      </div>
+                    </div>
+
+                    {/* Tabla reducida */}
+                    <div className="overflow-hidden border border-slate-900 rounded-xl bg-slate-950 text-[10px]">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-slate-900 text-slate-400 font-black uppercase text-[8px] tracking-wider border-b border-slate-900">
+                            <th className="py-2 px-3">Fecha</th>
+                            <th className="py-2 px-2 text-center">Yo-Yo (m)</th>
+                            <th className="py-2 px-2 text-center">Vel. (km/h)</th>
+                            <th className="py-2 px-2 text-center">Illinois (s)</th>
+                            <th className="py-2 px-2 text-center">Sprint 30m</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-900/60 font-medium">
+                          {rows.slice(-5).map((row, idx) => (
+                            <tr key={idx} className="hover:bg-slate-900/20">
+                              <td className="py-2 px-3 font-bold text-white">
+                                {row.date}
+                                {row.isEstimated && <span className="text-[7px] text-amber-500 block font-normal">Base Estimada</span>}
+                              </td>
+                              <td className="py-2 px-2 text-center text-emerald-400 font-bold">{row.yoyo_m ? `${row.yoyo_m} m` : '-'}</td>
+                              <td className="py-2 px-2 text-center text-slate-300">{row.yoyo_kmh ? `${row.yoyo_kmh} km/h` : '-'}</td>
+                              <td className="py-2 px-2 text-center text-red-400 font-bold">{row.illinois ? `${row.illinois} s` : '-'}</td>
+                              <td className="py-2 px-2 text-center text-amber-500 font-bold">{row.vel30m ? `${row.vel30m} s` : '-'}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Gráfico de Capacidad Física vs Media */}
+                    <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                      <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">
+                        Índice de Capacidad Física vs Media del Equipo (100%)
+                      </span>
+                      <div className="h-32 w-full font-mono">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={physicalProgressData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                            <XAxis dataKey="name" stroke="#64748b" fontSize={8} tickLine={false} />
+                            <YAxis stroke="#64748b" fontSize={8} domain={[0, 120]} tickLine={false} />
+                            <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
+                            <Legend wrapperStyle={{ fontSize: '8px' }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
+                            <Bar dataKey="Jugador" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                            <Bar dataKey="Media Equipo" fill="#475569" radius={[3, 3, 0, 0]} />
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Evolución Temporal (si hay más de 1 registro real) */}
+                    {physicalTests.length >= 2 && (
+                      <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                        <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">Evolución de Rendimiento</span>
+                        <div className="h-32 w-full font-mono">
+                          <ResponsiveContainer width="100%" height="100%">
+                            <LineChart data={physicalTests} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
+                              <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                              <XAxis dataKey="date" stroke="#64748b" fontSize={8} />
+                              <YAxis stroke="#64748b" fontSize={8} />
+                              <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
+                              <Line type="monotone" dataKey="yoyo_m" name="Yo-Yo (m)" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                              <Line type="monotone" dataKey="vel30m" name="Sprint 30m (s)" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} />
+                            </LineChart>
+                          </ResponsiveContainer>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })()}
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA © 2026</span>
+          <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+        </div>
+      </div>
+
+      {/* PAGE 9: COMPARATIVA INTERNA DE RENDIMIENTO */}
+      <div className="bg-[#020617] rounded-[2.5rem] border border-blue-900/40 p-8 sm:p-12 relative overflow-hidden flex flex-col justify-between w-full min-h-[850px] shadow-2xl page-break mt-8">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.03),transparent_70%)] pointer-events-none" />
+        
+        <div className="flex justify-between items-center border-b border-blue-950 pb-4 mb-6">
+          <div className="flex items-center gap-3 text-left">
+            <div className="w-8 h-8 rounded bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-sky-400 font-black text-xs">
+              09
+            </div>
+            <div>
+              <h4 className="text-xs font-black uppercase text-white leading-none">COMPARATIVA INTERNA DE RENDIMIENTO</h4>
+              <span className="text-[9px] text-slate-500 uppercase tracking-widest">RANGO Y PERCENTILES COMPARATIVOS CON EL GRUPO DE COMPAÑERAS</span>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase tracking-widest text-blue-400">UDLP METODOLOGÍA</span>
+        </div>
+
+        <div className="my-auto space-y-8 text-left">
+          {/* Header metric selection tabs */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-900/40 border border-slate-900 p-4 rounded-2xl">
+            <div>
+              <h5 className="text-xs font-black text-amber-500 uppercase tracking-wider">Métrica de Comparativa</h5>
+              <p className="text-[10px] text-slate-400">Selecciona el test para evaluar el rango del jugador frente a la plantilla</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {[
+                { id: 'yoyo_m', label: 'Yo-Yo Test (m)' },
+                { id: 'yoyo_kmh', label: 'Velocidad (km/h)' },
+                { id: 'illinois', label: 'Illinois (s)' },
+                { id: 'vel30m', label: 'Sprint 30m (s)' }
+              ].map(opt => (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => setCompareMetric(opt.id as any)}
+                  className={`text-[10px] font-black uppercase py-2 px-3 rounded-xl transition-all ${
+                    compareMetric === opt.id 
+                      ? 'bg-amber-500 text-slate-950 shadow-md shadow-amber-500/15' 
+                      : 'bg-slate-950 border border-slate-850 text-slate-400 hover:text-white hover:bg-slate-900'
+                  }`}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Main Visuals layout */}
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+            {/* Chart Area - 8 columns */}
+            <div className="lg:col-span-8 bg-slate-900/20 border border-slate-900 p-4 rounded-2xl space-y-3">
+              <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
+                Clasificación de Plantilla • {getMetricName()}
+              </span>
+              <div className="h-64 w-full font-mono">
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart data={sortedCompareData} margin={{ top: 15, right: 10, left: -25, bottom: 25 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                    <XAxis 
+                      dataKey="displayName" 
+                      stroke="#64748b" 
+                      fontSize={8} 
+                      tickLine={false} 
+                      angle={-35} 
+                      textAnchor="end"
+                      height={50}
+                    />
+                    <YAxis 
+                      stroke="#64748b" 
+                      fontSize={8} 
+                      tickLine={false} 
+                      domain={[0, 'auto']} 
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} 
+                      formatter={(v) => [`${v}${getMetricUnit()}`, getMetricName()]}
+                    />
+                    <Bar dataKey="value" fill="#475569" radius={[4, 4, 0, 0]}>
+                      {sortedCompareData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-${index}`} 
+                          fill={entry.isCurrentPlayer ? '#f59e0b' : '#3b82f6'} 
+                          opacity={entry.isCurrentPlayer ? 1 : 0.4}
+                        />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex justify-between text-[8px] font-black uppercase tracking-widest text-slate-500 px-2">
+                <span>← MEJOR RENDIMIENTO</span>
+                <span>PEOR RENDIMIENTO →</span>
+              </div>
+            </div>
+
+            {/* Stats Insights - 4 columns */}
+            <div className="lg:col-span-4 space-y-4">
+              <div className="bg-slate-900/60 border border-slate-900 p-5 rounded-2xl space-y-4 text-left">
+                <h5 className="text-[10px] font-black text-amber-500 uppercase tracking-widest border-b border-slate-800 pb-2">
+                  MÉTRICAS DE RENDIMIENTO GRUPAL
+                </h5>
+                <div className="space-y-3.5 text-xs">
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[10px] block uppercase">Puesto en el Equipo</span>
+                    <strong className="text-lg text-white font-extrabold block mt-0.5">
+                      Puesto #{currentRank} <span className="text-xs text-slate-500 font-normal">de {sortedCompareData.length}</span>
+                    </strong>
+                  </div>
+                  <div className="h-px bg-slate-800/60" />
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[10px] block uppercase">Registro de {player.nombre}</span>
+                    <strong className="text-lg text-amber-500 font-extrabold block mt-0.5">
+                      {currentVal}{getMetricUnit()}
+                    </strong>
+                  </div>
+                  <div className="h-px bg-slate-800/60" />
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[10px] block uppercase">Media de la Plantilla</span>
+                    <strong className="text-sm text-slate-300 font-bold block mt-0.5">
+                      {teamAverage}{getMetricUnit()}
+                    </strong>
+                  </div>
+                  <div className="h-px bg-slate-800/60" />
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[10px] block uppercase">Desviación sobre la Media</span>
+                    <strong className={`text-xs font-bold block mt-0.5 ${deviation >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                      {deviationText}
+                    </strong>
+                  </div>
+                  <div className="h-px bg-slate-800/60" />
+                  <div>
+                    <span className="text-slate-400 font-semibold text-[10px] block uppercase">Mejor Registro del Equipo</span>
+                    <strong className="text-xs text-sky-400 font-bold block mt-0.5" title={bestPlayerName}>
+                      {bestValue}{getMetricUnit()} <span className="text-[10px] text-slate-500 font-normal">by {bestPlayerName.split(' ')[0]}</span>
+                    </strong>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-amber-500/10 border border-amber-500/20 p-4 rounded-2xl space-y-1 text-[10px] text-amber-400/90 leading-relaxed text-left">
+                <span className="font-bold uppercase block text-[9px] text-amber-500 mb-1">💡 Análisis de Rango:</span>
+                <p>
+                  El jugador se encuentra en el <strong>{Math.round((1 - (currentRank / sortedCompareData.length)) * 100)}º percentil</strong> del equipo para este test.
+                  {currentRank === 1 ? ' ¡Es la mejor marca registrada en la plantilla actual!' : 
+                   currentRank <= 3 ? ' Está en el top 3 de rendimiento del grupo.' : 
+                   deviation >= 0 ? ' Su rendimiento se mantiene por encima de la media colectiva.' : 
+                   ' Se recomienda entrenamiento compensatorio para acercarse al promedio de la plantilla.'}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="border-t border-slate-900 pt-4 flex justify-between items-center text-[9px] text-slate-500 uppercase tracking-wider">
+          <span>U.D. LA POVEDA © 2026</span>
+          <span>ÁREA DE METODOLOGÍA Y RENDIMIENTO</span>
+        </div>
+      </div>
+
     </div>
   );
 }
@@ -1237,6 +2003,44 @@ export default function Plantilla() {
   const [showPrintPreview, setShowPrintPreview] = useState(false);
   const [printReportType, setPrintReportType] = useState<'FUT' | 'DOSSIER' | 'BOTH'>('FUT');
   
+  // 3-evaluations state and period selector
+  const [evaluations, setEvaluations] = useState<Record<string, Record<string, any>>>({});
+  const [selectedPeriod, setSelectedPeriod] = useState<'Septiembre' | 'Diciembre' | 'Mayo'>('Septiembre');
+
+  const getPlayerComparisonData = (playerId: string) => {
+    const player = players.find(p => p.id === playerId);
+    if (!player) return [];
+
+    const baseStats = getPlayerStats(player);
+    const periods: ('Septiembre' | 'Diciembre' | 'Mayo')[] = ['Septiembre', 'Diciembre', 'Mayo'];
+
+    return periods.map(p => {
+      const evalData = evaluations[playerId]?.[p];
+      if (evalData && evalData.stats) {
+        return {
+          name: p,
+          'Rating General': evalData.stats.rating_general !== undefined ? evalData.stats.rating_general : baseStats.rating_general,
+          'Ritmo': evalData.stats.ritmo !== undefined ? evalData.stats.ritmo : baseStats.ritmo,
+          'Tiro': evalData.stats.tiro !== undefined ? evalData.stats.tiro : baseStats.tiro,
+          'Pase': evalData.stats.pase !== undefined ? evalData.stats.pase : baseStats.pase,
+          'Regate': evalData.stats.regate !== undefined ? evalData.stats.regate : baseStats.regate,
+          'Defensa': evalData.stats.defensa !== undefined ? evalData.stats.defensa : baseStats.defensa,
+          'Físico': evalData.stats.fisico !== undefined ? evalData.stats.fisico : baseStats.fisico,
+        };
+      }
+      return {
+        name: p,
+        'Rating General': baseStats.rating_general,
+        'Ritmo': baseStats.ritmo,
+        'Tiro': baseStats.tiro,
+        'Pase': baseStats.pase,
+        'Regate': baseStats.regate,
+        'Defensa': baseStats.defensa,
+        'Físico': baseStats.fisico,
+      };
+    });
+  };
+  
   // Stats and FIFA attributes editing state
   const [isEditingStats, setIsEditingStats] = useState(false);
   const [editableAttributes, setEditableAttributes] = useState<Record<string, number>>({});
@@ -1392,6 +2196,14 @@ export default function Plantilla() {
       localStorage.setItem(key, JSON.stringify(defaults));
       setPlayers(defaults);
     }
+
+    const evaluationsKey = `team_evaluations_${selectedTeam}`;
+    const savedEvaluations = localStorage.getItem(evaluationsKey);
+    if (savedEvaluations) {
+      setEvaluations(JSON.parse(savedEvaluations));
+    } else {
+      setEvaluations({});
+    }
     
     // Load signed players from scouting database
     fetchSignedScoutingPlayers();
@@ -1473,11 +2285,65 @@ export default function Plantilla() {
 
           if (!error && data) {
             setProfileAttributes(data);
-            const attrMap: Record<string, number> = {};
+            
+            // Reconstruct evaluations from prefixed attributes in Supabase
+            const baseAttrMap: Record<string, number> = {};
+            const cloudEvals: Record<string, Record<string, any>> = { ...evaluations };
+            if (!cloudEvals[selectedPlayerProfile.id]) {
+              cloudEvals[selectedPlayerProfile.id] = {
+                Septiembre: { stats: {}, attributes: {} },
+                Diciembre: { stats: {}, attributes: {} },
+                Mayo: { stats: {}, attributes: {} }
+              };
+            }
+
             data.forEach(item => {
-              attrMap[item.atributo] = item.valor;
+              const name = item.atributo;
+              const val = item.valor;
+
+              if (name.includes(':')) {
+                const parts = name.split(':');
+                const period = parts[0];
+                const attrName = parts[1];
+
+                if (period === 'Septiembre' || period === 'Diciembre' || period === 'Mayo') {
+                  if (!cloudEvals[selectedPlayerProfile.id][period]) {
+                    cloudEvals[selectedPlayerProfile.id][period] = { stats: {}, attributes: {} };
+                  }
+                  
+                  const isStatField = ['partidos_jugados', 'minutos_jugados', 'goles', 'asistencias', 'tarjetas_amarillas', 'tarjetas_rojas', 'asistencia_entrenamientos', 'ritmo', 'tiro', 'pase', 'regate', 'defensa', 'fisico', 'rating_general'].includes(attrName);
+                  if (isStatField) {
+                    cloudEvals[selectedPlayerProfile.id][period].stats[attrName] = val;
+                  } else {
+                    cloudEvals[selectedPlayerProfile.id][period].attributes[attrName] = val;
+                  }
+                }
+              } else {
+                baseAttrMap[name] = val;
+              }
             });
-            setEditableAttributes(attrMap);
+
+            // Update local storage and state with synced evaluations
+            setEvaluations(cloudEvals);
+            localStorage.setItem(`team_evaluations_${selectedTeam}`, JSON.stringify(cloudEvals));
+
+            // Load active period data
+            const activeBaseStats = getPlayerStats(selectedPlayerProfile);
+            const periodEval = cloudEvals[selectedPlayerProfile.id]?.[selectedPeriod];
+            
+            if (periodEval && (Object.keys(periodEval.stats).length > 0 || Object.keys(periodEval.attributes).length > 0)) {
+              setStatsForm({
+                ...activeBaseStats,
+                ...periodEval.stats
+              });
+              setEditableAttributes({
+                ...baseAttrMap,
+                ...periodEval.attributes
+              });
+            } else {
+              setStatsForm(activeBaseStats);
+              setEditableAttributes(baseAttrMap);
+            }
           } else {
             setProfileAttributes([]);
             setEditableAttributes({});
@@ -1494,6 +2360,34 @@ export default function Plantilla() {
       setProfileAttributes([]);
     }
   }, [selectedPlayerProfile, scoutingSignedPlayers]);
+
+  // Handle period change and load relevant stats and attributes
+  useEffect(() => {
+    if (selectedPlayerProfile) {
+      const activeBaseStats = getPlayerStats(selectedPlayerProfile);
+      const baseAttrMap: Record<string, number> = {};
+      profileAttributes.forEach(item => {
+        if (!item.atributo.includes(':')) {
+          baseAttrMap[item.atributo] = item.valor;
+        }
+      });
+
+      const periodEval = evaluations[selectedPlayerProfile.id]?.[selectedPeriod];
+      if (periodEval && (Object.keys(periodEval.stats).length > 0 || Object.keys(periodEval.attributes).length > 0)) {
+        setStatsForm({
+          ...activeBaseStats,
+          ...periodEval.stats
+        });
+        setEditableAttributes({
+          ...baseAttrMap,
+          ...periodEval.attributes
+        });
+      } else {
+        setStatsForm(activeBaseStats);
+        setEditableAttributes(baseAttrMap);
+      }
+    }
+  }, [selectedPeriod]);
 
   const fetchSignedScoutingPlayers = async () => {
     try {
@@ -1754,7 +2648,30 @@ export default function Plantilla() {
       // 1. Calculate FIFA attributes from the 0-5 scouting ratings in editableAttributes
       const fifaStats = calculateFifaStatsFromScouting(selectedPlayerProfile.posicion, editableAttributes);
 
-      // 2. Prepare the player object with season stats and calculated FIFA attributes
+      // 2. Update the evaluations local state for the selected player and selected period
+      const updatedEvals = {
+        ...evaluations,
+        [selectedPlayerProfile.id]: {
+          ...(evaluations[selectedPlayerProfile.id] || {}),
+          [selectedPeriod]: {
+            stats: {
+              partidos_jugados: statsForm.partidos_jugados,
+              minutos_jugados: statsForm.minutos_jugados,
+              goles: statsForm.goles,
+              asistencias: statsForm.asistencias,
+              tarjetas_amarillas: statsForm.tarjetas_amarillas,
+              tarjetas_rojas: statsForm.tarjetas_rojas,
+              asistencia_entrenamientos: statsForm.asistencia_entrenamientos,
+              ...fifaStats // ritmo, tiro, pase, regate, defensa, fisico, rating_general
+            },
+            attributes: editableAttributes
+          }
+        }
+      };
+      setEvaluations(updatedEvals);
+      localStorage.setItem(`team_evaluations_${selectedTeam}`, JSON.stringify(updatedEvals));
+
+      // 3. Prepare the player object with season stats and calculated FIFA attributes
       const updatedPlayers = players.map(p => {
         if (p.id === selectedPlayerProfile.id) {
           const updated = {
@@ -1775,11 +2692,10 @@ export default function Plantilla() {
         return p;
       });
 
-      // 3. Save roster to local storage
+      // 4. Save roster to local storage
       saveRoster(updatedPlayers);
 
-      // 4. Save 0-5 scouting attributes to Supabase
-      // First, get or create the player ID in Supabase players table
+      // 5. Save 0-5 scouting attributes and evaluations to Supabase
       let dbPlayerId = selectedPlayerProfile.id;
       const match = scoutingSignedPlayers.find(p => 
         p.id === selectedPlayerProfile.id || 
@@ -1824,11 +2740,45 @@ export default function Plantilla() {
       const common = COMMON_ATTRIBUTES.flatMap(g => g.items);
       const allAttrs = Array.from(new Set([...specific, ...common]));
 
-      const attributePayloads = allAttrs.map(attr => ({
+      // Standard base attributes payload
+      const basePayloads = allAttrs.map(attr => ({
         player_id: dbPlayerId,
         atributo: attr,
         valor: typeof editableAttributes[attr] === 'number' ? editableAttributes[attr] : 0
       }));
+
+      // Gather all evaluation period payloads (attributes & stats)
+      const playerEvals = updatedEvals[selectedPlayerProfile.id] || {};
+      const evalPayloads: any[] = [];
+      const statFields = ['partidos_jugados', 'minutos_jugados', 'goles', 'asistencias', 'tarjetas_amarillas', 'tarjetas_rojas', 'asistencia_entrenamientos', 'ritmo', 'tiro', 'pase', 'regate', 'defensa', 'fisico', 'rating_general'];
+
+      (['Septiembre', 'Diciembre', 'Mayo'] as const).forEach(p => {
+        const pData = playerEvals[p];
+        if (pData) {
+          allAttrs.forEach(attr => {
+            const val = pData.attributes?.[attr];
+            if (val !== undefined) {
+              evalPayloads.push({
+                player_id: dbPlayerId,
+                atributo: `${p}:${attr}`,
+                valor: val
+              });
+            }
+          });
+          statFields.forEach(field => {
+            const val = pData.stats?.[field];
+            if (val !== undefined) {
+              evalPayloads.push({
+                player_id: dbPlayerId,
+                atributo: `${p}:${field}`,
+                valor: val
+              });
+            }
+          });
+        }
+      });
+
+      const combinedPayloads = [...basePayloads, ...evalPayloads];
 
       // Delete existing attributes for clean write
       await supabase.from('player_attributes').delete().eq('player_id', dbPlayerId);
@@ -1836,15 +2786,15 @@ export default function Plantilla() {
       // Save to Supabase
       const { error: attrError } = await supabase
         .from('player_attributes')
-        .upsert(attributePayloads);
+        .upsert(combinedPayloads);
 
       if (attrError) {
         console.error("Error upserting player attributes in Plantilla:", attrError);
         toast.warning("Estadísticas guardadas en local, pero hubo un problema al sincronizar con Supabase.");
       } else {
-        toast.success(`Estadísticas y Valoraciones de ${selectedPlayerProfile.nombre} guardadas y sincronizadas con éxito.`);
+        toast.success(`Métricas de ${selectedPlayerProfile.nombre} del periodo ${selectedPeriod} guardadas con éxito.`);
         // Refresh local profile attributes state
-        setProfileAttributes(attributePayloads);
+        setProfileAttributes(combinedPayloads);
       }
 
       setIsEditingStats(false);
@@ -2369,9 +3319,39 @@ export default function Plantilla() {
                 </div>
               </div>
 
+              {/* PERIODO DE VALORACIÓN SELECTOR */}
+              <div className="bg-slate-950 p-3 rounded-2xl border border-slate-850 flex flex-col sm:flex-row gap-3 justify-between items-center">
+                <div className="flex flex-col text-center sm:text-left">
+                  <span className="text-[9px] text-slate-500 font-black uppercase tracking-widest leading-none">Periodo de Valoración</span>
+                  <p className="text-xs text-white font-bold uppercase mt-1">Sinfonía de Evolución Anual</p>
+                </div>
+                
+                <div className="flex bg-slate-900 p-1 rounded-xl border border-slate-800 gap-1 w-full sm:w-auto">
+                  {(['Septiembre', 'Diciembre', 'Mayo'] as const).map(period => (
+                    <button
+                      key={period}
+                      type="button"
+                      onClick={() => setSelectedPeriod(period)}
+                      className={cn(
+                        "flex-1 sm:flex-none text-[10px] font-black uppercase px-3 py-2 rounded-lg transition-all",
+                        selectedPeriod === period 
+                          ? "bg-amber-500 text-slate-950 shadow-md" 
+                          : "text-slate-400 hover:text-white"
+                      )}
+                    >
+                      {period}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               {/* Data sheets grid */}
               {(() => {
-                const currentStats = getPlayerStats(selectedPlayerProfile);
+                const baseStats = getPlayerStats(selectedPlayerProfile);
+                const periodEval = evaluations[selectedPlayerProfile.id]?.[selectedPeriod];
+                const currentStats = (periodEval && periodEval.stats && Object.keys(periodEval.stats).length > 0)
+                  ? { ...baseStats, ...periodEval.stats }
+                  : baseStats;
                 return isEditingStats ? (
                   <form onSubmit={handleSavePlayerStats} className="space-y-4 text-left w-full">
                     <div className="bg-slate-950/40 border border-slate-850 p-4 rounded-2xl space-y-3">
@@ -2787,79 +3767,156 @@ export default function Plantilla() {
                     </div>
 
                     {/* Scouting Evaluations Panel */}
-                    {profileAttributes.length > 0 && (
-                      <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-2xl space-y-4 mt-4 text-left">
-                        <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                          <h5 className="text-[11px] text-emerald-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
-                            <Award className="w-4 h-4 text-emerald-500" />
-                            <span>Valoraciones de Captación y Scouting ({selectedPlayerProfile.posicion})</span>
-                          </h5>
-                          <span className="text-[10px] font-bold text-slate-500 uppercase">Escala 0-5</span>
+                    <div className="bg-slate-950/60 border border-slate-850 p-4 rounded-2xl space-y-4 mt-4 text-left">
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-2">
+                        <h5 className="text-[11px] text-emerald-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                          <Award className="w-4 h-4 text-emerald-500" />
+                          <span>Valoraciones de Captación y Scouting de {selectedPeriod} ({selectedPlayerProfile.posicion})</span>
+                        </h5>
+                        <span className="text-[10px] font-bold text-slate-500 uppercase">Escala 0-5</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-1">
+                        {/* Specific attributes of the demarcation */}
+                        <div className="space-y-3">
+                          <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">Específicos</span>
+                          {(POSITION_STRUCTURED_ATTRIBUTES[selectedPlayerProfile.posicion] || []).map(group => {
+                            const groupAttrs = group.items.map(name => ({
+                              atributo: name,
+                              valor: typeof editableAttributes[name] === 'number' ? editableAttributes[name] : 0
+                            }));
+                            return (
+                              <div key={group.category} className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
+                                <span className="text-[9px] font-black text-emerald-500/80 uppercase tracking-widest block">{group.category}</span>
+                                <div className="space-y-1.5">
+                                  {groupAttrs.map(attr => (
+                                    <div key={attr.atributo} className="flex justify-between items-center text-xs">
+                                      <span className="text-slate-400 uppercase text-[10px] truncate max-w-[130px]">{attr.atributo}</span>
+                                      <span className={cn(
+                                        "font-black px-1.5 py-0.5 rounded text-[9px] min-w-[32px] text-center",
+                                        attr.valor === 0 && "text-red-500 bg-red-500/10",
+                                        attr.valor === 1 && "text-red-400 bg-red-400/10",
+                                        attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                                        attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                                        attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                                        attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
+                                      )}>{attr.valor}/5</span>
+                                    </div>
+                                  ))}
+                                </div>
+                              </div>
+                            );
+                          })}
                         </div>
-                        
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-h-[250px] overflow-y-auto pr-1">
-                          {/* Specific attributes of the demarcation */}
-                          <div className="space-y-3">
-                            <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">Específicos</span>
-                            {(POSITION_STRUCTURED_ATTRIBUTES[selectedPlayerProfile.posicion] || []).map(group => {
-                              const groupAttrs = profileAttributes.filter(a => group.items.includes(a.atributo));
-                              if (groupAttrs.length === 0) return null;
-                              return (
-                                <div key={group.category} className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
-                                  <span className="text-[9px] font-black text-emerald-500/80 uppercase tracking-widest block">{group.category}</span>
-                                  <div className="space-y-1.5">
-                                    {groupAttrs.map(attr => (
-                                      <div key={attr.atributo} className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-400 uppercase text-[10px] truncate max-w-[130px]">{attr.atributo}</span>
-                                        <span className={cn(
-                                          "font-black px-1.5 py-0.5 rounded text-[9px] min-w-[32px] text-center",
-                                          attr.valor === 0 && "text-red-500 bg-red-500/10",
-                                          attr.valor === 1 && "text-red-400 bg-red-400/10",
-                                          attr.valor === 2 && "text-orange-500 bg-orange-500/10",
-                                          attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
-                                          attr.valor === 4 && "text-blue-500 bg-blue-500/10",
-                                          attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
-                                        )}>{attr.valor}/5</span>
-                                      </div>
-                                    ))}
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
 
-                          {/* Common Attributes */}
-                          <div className="space-y-3">
-                            <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">Metodológicos</span>
-                            {COMMON_ATTRIBUTES.map(group => {
-                              const groupAttrs = profileAttributes.filter(a => group.items.includes(a.atributo));
-                              if (groupAttrs.length === 0) return null;
-                              return (
-                                <div key={group.category} className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
-                                  <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block">{group.category}</span>
-                                  <div className="space-y-1.5">
-                                    {groupAttrs.map(attr => (
-                                      <div key={attr.atributo} className="flex justify-between items-center text-xs">
-                                        <span className="text-slate-400 uppercase text-[10px] truncate max-w-[130px]">{attr.atributo}</span>
-                                        <span className={cn(
-                                          "font-black px-1.5 py-0.5 rounded text-[9px] min-w-[32px] text-center",
-                                          attr.valor === 0 && "text-red-500 bg-red-500/10",
-                                          attr.valor === 1 && "text-red-400 bg-red-400/10",
-                                          attr.valor === 2 && "text-orange-500 bg-orange-500/10",
-                                          attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
-                                          attr.valor === 4 && "text-blue-500 bg-blue-500/10",
-                                          attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
-                                        )}>{attr.valor}/5</span>
-                                      </div>
-                                    ))}
-                                  </div>
+                        {/* Common Attributes */}
+                        <div className="space-y-3">
+                          <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider pb-0.5 border-b border-slate-800/60 block">Metodológicos</span>
+                          {COMMON_ATTRIBUTES.map(group => {
+                            const groupAttrs = group.items.map(name => ({
+                              atributo: name,
+                              valor: typeof editableAttributes[name] === 'number' ? editableAttributes[name] : 0
+                            }));
+                            return (
+                              <div key={group.category} className="space-y-1.5 bg-slate-900/40 p-2.5 rounded-xl border border-slate-800">
+                                <span className="text-[9px] font-black text-blue-400 uppercase tracking-widest block">{group.category}</span>
+                                <div className="space-y-1.5">
+                                  {groupAttrs.map(attr => (
+                                    <div key={attr.atributo} className="flex justify-between items-center text-xs">
+                                      <span className="text-slate-400 uppercase text-[10px] truncate max-w-[130px]">{attr.atributo}</span>
+                                      <span className={cn(
+                                        "font-black px-1.5 py-0.5 rounded text-[9px] min-w-[32px] text-center",
+                                        attr.valor === 0 && "text-red-500 bg-red-500/10",
+                                        attr.valor === 1 && "text-red-400 bg-red-400/10",
+                                        attr.valor === 2 && "text-orange-500 bg-orange-500/10",
+                                        attr.valor === 3 && "text-yellow-500 bg-yellow-500/10",
+                                        attr.valor === 4 && "text-blue-500 bg-blue-500/10",
+                                        attr.valor === 5 && "text-emerald-500 bg-emerald-500/10"
+                                      )}>{attr.valor}/5</span>
+                                    </div>
+                                  ))}
                                 </div>
-                              );
-                            })}
-                          </div>
+                              </div>
+                            );
+                          })}
                         </div>
                       </div>
-                    )}
+                    </div>
+
+                    {/* COMPARATIVE PROGRESSION CHART */}
+                    <div className="bg-slate-950/40 border border-slate-850 p-5 rounded-2xl space-y-4 mt-4">
+                      <div className="border-b border-slate-900 pb-2">
+                        <h5 className="text-[11px] text-blue-400 font-extrabold uppercase tracking-wider flex items-center gap-1.5">
+                          <TrendingUp className="w-4 h-4 text-blue-400" />
+                          <span>Evolución Anual Comparativa (Septiembre vs Diciembre vs Mayo)</span>
+                        </h5>
+                        <p className="text-[9px] text-slate-500 font-bold uppercase mt-0.5">Progreso trimestral de atributos de rendimiento para {selectedPlayerProfile.nombre}</p>
+                      </div>
+
+                      <div className="h-56 w-full pt-2">
+                        {(() => {
+                          const compData = getPlayerComparisonData(selectedPlayerProfile.id);
+                          const attrData = [
+                            {
+                              name: 'OVR (General)',
+                              'Septiembre': compData[0]?.['Rating General'] || 0,
+                              'Diciembre': compData[1]?.['Rating General'] || 0,
+                              'Mayo': compData[2]?.['Rating General'] || 0,
+                            },
+                            {
+                              name: 'RIT (Ritmo)',
+                              'Septiembre': compData[0]?.['Ritmo'] || 0,
+                              'Diciembre': compData[1]?.['Ritmo'] || 0,
+                              'Mayo': compData[2]?.['Ritmo'] || 0,
+                            },
+                            {
+                              name: 'TIR (Tiro)',
+                              'Septiembre': compData[0]?.['Tiro'] || 0,
+                              'Diciembre': compData[1]?.['Tiro'] || 0,
+                              'Mayo': compData[2]?.['Tiro'] || 0,
+                            },
+                            {
+                              name: 'PAS (Pase)',
+                              'Septiembre': compData[0]?.['Pase'] || 0,
+                              'Diciembre': compData[1]?.['Pase'] || 0,
+                              'Mayo': compData[2]?.['Pase'] || 0,
+                            },
+                            {
+                              name: 'REG (Regate)',
+                              'Septiembre': compData[0]?.['Regate'] || 0,
+                              'Diciembre': compData[1]?.['Regate'] || 0,
+                              'Mayo': compData[2]?.['Regate'] || 0,
+                            },
+                            {
+                              name: 'DEF (Defensa)',
+                              'Septiembre': compData[0]?.['Defensa'] || 0,
+                              'Diciembre': compData[1]?.['Defensa'] || 0,
+                              'Mayo': compData[2]?.['Defensa'] || 0,
+                            },
+                            {
+                              name: 'FIS (Físico)',
+                              'Septiembre': compData[0]?.['Físico'] || 0,
+                              'Diciembre': compData[1]?.['Físico'] || 0,
+                              'Mayo': compData[2]?.['Físico'] || 0,
+                            },
+                          ];
+                          return (
+                            <ResponsiveContainer width="100%" height="100%">
+                              <BarChart data={attrData} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
+                                <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
+                                <XAxis dataKey="name" stroke="#64748b" fontSize={9} tickLine={false} fontWeight="bold" />
+                                <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 100]} />
+                                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff', fontSize: '10px' }} />
+                                <Legend wrapperStyle={{ fontSize: 9 }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
+                                <Bar dataKey="Septiembre" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+                                <Bar dataKey="Diciembre" fill="#f59e0b" radius={[3, 3, 0, 0]} />
+                                <Bar dataKey="Mayo" fill="#10b981" radius={[3, 3, 0, 0]} />
+                              </BarChart>
+                            </ResponsiveContainer>
+                          );
+                        })()}
+                      </div>
+                    </div>
                   </div>
                 );
               })()}
@@ -3259,7 +4316,7 @@ export default function Plantilla() {
                     </div>
                   )}
                   <div className="p-1 sm:p-2 bg-slate-950 rounded-[2.5rem] border border-slate-850">
-                    <DetailedPerformanceDossier player={selectedPlayerProfile} stats={getPlayerStats(selectedPlayerProfile)} />
+                    <DetailedPerformanceDossier player={selectedPlayerProfile} stats={getPlayerStats(selectedPlayerProfile)} allPlayers={players} />
                   </div>
                 </div>
               )}
@@ -3363,7 +4420,7 @@ export default function Plantilla() {
 
           {(printReportType === 'DOSSIER' || printReportType === 'BOTH') && (
             <div className="max-w-5xl mx-auto">
-              <DetailedPerformanceDossier player={selectedPlayerProfile} stats={getPlayerStats(selectedPlayerProfile)} />
+              <DetailedPerformanceDossier player={selectedPlayerProfile} stats={getPlayerStats(selectedPlayerProfile)} allPlayers={players} />
             </div>
           )}
 
