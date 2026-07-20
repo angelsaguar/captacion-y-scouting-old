@@ -30,6 +30,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import UDLaPovedaLogo from '@/components/layout/UDLaPovedaLogo';
 import {
   ResponsiveContainer,
   BarChart,
@@ -1764,12 +1765,8 @@ function FUTPlayerCard({ player, stats }: { player: TeamPlayer; stats: any }) {
 
           {/* Top Right: Custom Club Crest Shield */}
           <div className="mt-1 pr-1">
-            <div className="w-10 h-11 bg-gradient-to-b from-blue-600 to-indigo-950 border-2 border-amber-400 rounded-b-xl flex flex-col items-center justify-center shadow-lg overflow-hidden">
-              <span className="text-[5px] font-black text-amber-300 tracking-tighter leading-none mt-1">U.D.</span>
-              <span className="text-[7px] font-extrabold text-white tracking-widest leading-none">LA POVEDA</span>
-              <div className="w-2.5 h-2.5 bg-white rotate-45 border border-blue-900 mt-1 flex items-center justify-center">
-                <div className="w-1.5 h-1.5 bg-red-600 rotate-45" />
-              </div>
+            <div className="w-10 h-10 bg-white/10 backdrop-blur-xs p-1 rounded-xl flex items-center justify-center shadow-lg border border-amber-500/30">
+              <UDLaPovedaLogo className="w-full h-full" />
             </div>
           </div>
         </div>

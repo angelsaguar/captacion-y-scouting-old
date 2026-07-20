@@ -1,27 +1,10 @@
-import React, { useState } from 'react';
+import React from 'react';
 
 interface UDLaPovedaLogoProps {
   className?: string;
 }
 
 export default function UDLaPovedaLogo({ className = "w-10 h-10" }: UDLaPovedaLogoProps) {
-  const sources = ["/escudo.png", "/escudo.jpg"];
-  const [sourceIndex, setSourceIndex] = useState(0);
-
-  // If we haven't exhausted our image sources, try loading them sequentially
-  if (sourceIndex < sources.length) {
-    return (
-      <img 
-        src={sources[sourceIndex]} 
-        alt="U.D. La Poveda Crest" 
-        className={`${className} object-contain block max-w-full max-h-full`}
-        onError={() => setSourceIndex((prev) => prev + 1)}
-        id="ud-la-poveda-png-crest"
-      />
-    );
-  }
-
-  // Graceful vector fallback optimized to be fully responsive on mobile devices
   return (
     <div className={`${className} flex items-center justify-center`} id="ud-la-poveda-svg-crest">
       <svg 
