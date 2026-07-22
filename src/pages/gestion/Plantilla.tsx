@@ -25,7 +25,8 @@ import {
   Edit,
   Save,
   Cloud,
-  TrendingUp
+  TrendingUp,
+  ExternalLink
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -982,13 +983,13 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
         <div className="my-auto grid grid-cols-1 md:grid-cols-12 gap-8 items-stretch">
           
           {/* Chart 1: Atributos individuales de su posición (Escala 1-5) */}
-          <div className="md:col-span-6 bg-slate-900/60 border border-blue-900/20 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
+          <div className="md:col-span-6 min-w-0 overflow-hidden bg-slate-900/60 border border-blue-900/20 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
             <div className="mb-4">
               <h5 className="text-[13px] font-black text-white uppercase tracking-wider">MÉTRICAS ESPECÍFICAS DE SCOUTING</h5>
               <p className="text-[10px] text-sky-400 font-medium">Atributos clave valorados para la posición de {player.posicion}</p>
             </div>
-            <div className="h-[560px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[560px] w-full min-w-0 overflow-hidden">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={finalChart1Data}
                   layout="vertical"
@@ -1022,7 +1023,7 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
                     wrapperStyle={{ fontSize: '11px', fontWeight: 'bold', paddingTop: '10px' }}
                     formatter={(value) => <span className="text-white font-black">{value} (Escala 1-5)</span>}
                   />
-                  <Bar dataKey="Puntuación" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={10}>
+                  <Bar isAnimationActive={false} dataKey="Puntuación" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={10}>
                     {finalChart1Data.map((entry, index) => {
                       // Custom color gradient per attribute value
                       const val = entry['Puntuación'];
@@ -1039,13 +1040,13 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
           </div>
 
           {/* Chart 2: Medias por Categoría de la Demarcación */}
-          <div className="md:col-span-6 bg-slate-900/60 border border-blue-900/20 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
+          <div className="md:col-span-6 min-w-0 overflow-hidden bg-slate-900/60 border border-blue-900/20 p-5 rounded-2xl flex flex-col justify-between shadow-lg">
             <div className="mb-4">
               <h5 className="text-[13px] font-black text-white uppercase tracking-wider">PROMEDIO POR ÁREAS DE JUEGO</h5>
               <p className="text-[10px] text-sky-400 font-medium">Rendimiento agrupado por categorías específicas vs Objetivo Club</p>
             </div>
-            <div className="h-[560px] w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-[560px] w-full min-w-0 overflow-hidden">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart
                   data={finalChart2Data}
                   margin={{ top: 5, right: 10, left: -15, bottom: 5 }}
@@ -1074,8 +1075,8 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
                     wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }}
                     formatter={(value) => <span className="text-white font-black px-1">{value}</span>}
                   />
-                  <Bar dataKey="Media Jugadora" fill="#3b82f6" name="Media Jugadora" radius={[4, 4, 0, 0]} barSize={14} />
-                  <Bar dataKey="Objetivo Club" fill="#1e293b" name="Objetivo Club" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="3,3" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar isAnimationActive={false} dataKey="Media Jugadora" fill="#3b82f6" name="Media Jugadora" radius={[4, 4, 0, 0]} barSize={14} />
+                  <Bar isAnimationActive={false} dataKey="Objetivo Club" fill="#1e293b" name="Objetivo Club" stroke="#f59e0b" strokeWidth={1.5} strokeDasharray="3,3" radius={[4, 4, 0, 0]} barSize={14} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1116,22 +1117,22 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
           </div>
 
           {/* Graphic Section */}
-          <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl text-left">
+          <div className="bg-slate-900/40 border border-slate-900 p-5 rounded-2xl text-left min-w-0 overflow-hidden">
             <h4 className="text-xs font-black text-amber-500 uppercase tracking-widest mb-4 flex items-center gap-1.5 border-b border-slate-900 pb-2">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
               <span>EVOLUCIÓN GRÁFICA DE ATRIBUTOS CLAVE</span>
             </h4>
-            <div className="h-64 w-full">
-              <ResponsiveContainer width="100%" height="100%">
+            <div className="h-64 w-full min-w-0 overflow-hidden">
+              <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                 <BarChart data={attributeProgressData} margin={{ top: 10, right: 10, left: -20, bottom: 5 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                   <XAxis dataKey="name" stroke="#64748b" fontSize={10} tickLine={false} fontWeight="black" />
                   <YAxis stroke="#64748b" fontSize={11} tickLine={false} domain={[0, 100]} fontWeight="black" />
                   <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', color: '#fff', fontSize: '11px' }} />
                   <Legend wrapperStyle={{ fontSize: '11px', paddingTop: '10px' }} formatter={(v) => <span className="text-white font-black px-1">{v}</span>} />
-                  <Bar dataKey="Septiembre" fill="#3b82f6" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Diciembre" fill="#f59e0b" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="Mayo" fill="#10b981" radius={[4, 4, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="Septiembre" fill="#3b82f6" radius={[4, 4, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="Diciembre" fill="#f59e0b" radius={[4, 4, 0, 0]} />
+                  <Bar isAnimationActive={false} dataKey="Mayo" fill="#10b981" radius={[4, 4, 0, 0]} />
                 </BarChart>
               </ResponsiveContainer>
             </div>
@@ -1298,18 +1299,18 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
                       { name: 'IMC (Índice)', 'Jugador': imc, 'Ref. Óptimo': 21.5 }
                     ];
                     return (
-                      <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                      <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl min-w-0 overflow-hidden">
                         <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">Composición Corporal vs Referencia Óptima</span>
-                        <div className="h-32 w-full font-mono">
-                          <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-32 w-full min-w-0 overflow-hidden font-mono">
+                          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <BarChart data={compChartData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                               <XAxis dataKey="name" stroke="#64748b" fontSize={8} tickLine={false} />
                               <YAxis stroke="#64748b" fontSize={8} domain={[0, 60]} tickLine={false} />
                               <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
                               <Legend wrapperStyle={{ fontSize: '8px' }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
-                              <Bar dataKey="Jugador" fill="#10b981" radius={[3, 3, 0, 0]} />
-                              <Bar dataKey="Ref. Óptimo" fill="#475569" radius={[3, 3, 0, 0]} />
+                              <Bar isAnimationActive={false} dataKey="Jugador" fill="#10b981" radius={[3, 3, 0, 0]} />
+                              <Bar isAnimationActive={false} dataKey="Ref. Óptimo" fill="#475569" radius={[3, 3, 0, 0]} />
                             </BarChart>
                           </ResponsiveContainer>
                         </div>
@@ -1319,18 +1320,18 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
 
                   {/* Grafico de Evolución Temporal (solo si hay más de un registro) */}
                   {antropometria.length >= 2 && (
-                    <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                    <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl min-w-0 overflow-hidden">
                       <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">Evolución Temporal de Composición</span>
-                      <div className="h-32 w-full font-mono">
-                        <ResponsiveContainer width="100%" height="100%">
+                      <div className="h-32 w-full min-w-0 overflow-hidden font-mono">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                           <LineChart data={antropometria} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                             <XAxis dataKey="date" stroke="#64748b" fontSize={8} />
                             <YAxis stroke="#64748b" fontSize={8} />
                             <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
-                            <Line type="monotone" dataKey="weight" name="Peso (kg)" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} />
-                            <Line type="monotone" dataKey="body_fat_pct" name="Grasa (%)" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} />
-                            <Line type="monotone" dataKey="muscle_pct" name="Músculo (%)" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line isAnimationActive={false} type="monotone" dataKey="weight" name="Peso (kg)" stroke="#38bdf8" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line isAnimationActive={false} type="monotone" dataKey="body_fat_pct" name="Grasa (%)" stroke="#f87171" strokeWidth={2} dot={{ r: 3 }} />
+                            <Line isAnimationActive={false} type="monotone" dataKey="muscle_pct" name="Músculo (%)" stroke="#34d399" strokeWidth={2} dot={{ r: 3 }} />
                           </LineChart>
                         </ResponsiveContainer>
                       </div>
@@ -1429,20 +1430,20 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
                     </div>
 
                     {/* Gráfico de Capacidad Física vs Media */}
-                    <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                    <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl min-w-0 overflow-hidden">
                       <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">
                         Índice de Capacidad Física vs Media del Equipo (100%)
                       </span>
-                      <div className="h-32 w-full font-mono">
-                        <ResponsiveContainer width="100%" height="100%">
+                      <div className="h-32 w-full min-w-0 overflow-hidden font-mono">
+                        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                           <BarChart data={physicalProgressData} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                             <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                             <XAxis dataKey="name" stroke="#64748b" fontSize={8} tickLine={false} />
                             <YAxis stroke="#64748b" fontSize={8} domain={[0, 120]} tickLine={false} />
                             <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
                             <Legend wrapperStyle={{ fontSize: '8px' }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
-                            <Bar dataKey="Jugador" fill="#ef4444" radius={[3, 3, 0, 0]} />
-                            <Bar dataKey="Media Equipo" fill="#475569" radius={[3, 3, 0, 0]} />
+                            <Bar isAnimationActive={false} dataKey="Jugador" fill="#ef4444" radius={[3, 3, 0, 0]} />
+                            <Bar isAnimationActive={false} dataKey="Media Equipo" fill="#475569" radius={[3, 3, 0, 0]} />
                           </BarChart>
                         </ResponsiveContainer>
                       </div>
@@ -1450,17 +1451,17 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
 
                     {/* Evolución Temporal (si hay más de 1 registro real) */}
                     {physicalTests.length >= 2 && (
-                      <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl">
+                      <div className="bg-slate-900/20 border border-slate-900 p-3 rounded-xl min-w-0 overflow-hidden">
                         <span className="text-[9px] text-slate-400 font-black uppercase tracking-wider block mb-2">Evolución de Rendimiento</span>
-                        <div className="h-32 w-full font-mono">
-                          <ResponsiveContainer width="100%" height="100%">
+                        <div className="h-32 w-full min-w-0 overflow-hidden font-mono">
+                          <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                             <LineChart data={physicalTests} margin={{ top: 5, right: 10, left: -25, bottom: 0 }}>
                               <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                               <XAxis dataKey="date" stroke="#64748b" fontSize={8} />
                               <YAxis stroke="#64748b" fontSize={8} />
                               <Tooltip contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} />
-                              <Line type="monotone" dataKey="yoyo_m" name="Yo-Yo (m)" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
-                              <Line type="monotone" dataKey="vel30m" name="Sprint 30m (s)" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} />
+                              <Line isAnimationActive={false} type="monotone" dataKey="yoyo_m" name="Yo-Yo (m)" stroke="#10b981" strokeWidth={2} dot={{ r: 3 }} />
+                              <Line isAnimationActive={false} type="monotone" dataKey="vel30m" name="Sprint 30m (s)" stroke="#fbbf24" strokeWidth={2} dot={{ r: 3 }} />
                             </LineChart>
                           </ResponsiveContainer>
                         </div>
@@ -1529,12 +1530,12 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
           {/* Main Visuals layout */}
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
             {/* Chart Area - 8 columns */}
-            <div className="lg:col-span-8 bg-slate-900/20 border border-slate-900 p-4 rounded-2xl space-y-3">
+            <div className="lg:col-span-8 min-w-0 overflow-hidden bg-slate-900/20 border border-slate-900 p-4 rounded-2xl space-y-3">
               <span className="text-[10px] text-slate-400 font-black uppercase tracking-wider block">
                 Clasificación de Plantilla • {getMetricName()}
               </span>
-              <div className="h-64 w-full font-mono">
-                <ResponsiveContainer width="100%" height="100%">
+              <div className="h-64 w-full min-w-0 overflow-hidden font-mono">
+                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                   <BarChart data={sortedCompareData} margin={{ top: 15, right: 10, left: -25, bottom: 25 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                     <XAxis 
@@ -1556,7 +1557,7 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
                       contentStyle={{ backgroundColor: '#020617', borderColor: '#334155', fontSize: '9px' }} 
                       formatter={(v) => [`${v}${getMetricUnit()}`, getMetricName()]}
                     />
-                    <Bar dataKey="value" fill="#475569" radius={[4, 4, 0, 0]}>
+                    <Bar isAnimationActive={false} dataKey="value" fill="#475569" radius={[4, 4, 0, 0]}>
                       {sortedCompareData.map((entry, index) => (
                         <Cell 
                           key={`cell-${index}`} 
@@ -3897,7 +3898,7 @@ export default function Plantilla() {
                         </div>
                       </div>
 
-                      <div className="h-56 w-full pt-2">
+                      <div className="h-56 w-full min-w-0 overflow-hidden pt-2">
                         {(() => {
                           const compData = getPlayerComparisonData(selectedPlayerProfile.id);
                           const attrData = [
@@ -3945,16 +3946,16 @@ export default function Plantilla() {
                             },
                           ];
                           return (
-                            <ResponsiveContainer width="100%" height="100%">
+                            <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={0}>
                               <BarChart data={attrData} margin={{ top: 5, right: 10, left: -25, bottom: 5 }}>
                                 <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
                                 <XAxis dataKey="name" stroke="#64748b" fontSize={9} tickLine={false} fontWeight="bold" />
                                 <YAxis stroke="#64748b" fontSize={9} tickLine={false} domain={[0, 100]} />
                                 <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#1e293b', color: '#fff', fontSize: '10px' }} />
                                 <Legend wrapperStyle={{ fontSize: 9 }} formatter={(v) => <span className="text-white font-semibold px-1">{v}</span>} />
-                                {comparePeriods.includes('Septiembre') && <Bar dataKey="Septiembre" fill="#3b82f6" radius={[3, 3, 0, 0]} />}
-                                {comparePeriods.includes('Diciembre') && <Bar dataKey="Diciembre" fill="#f59e0b" radius={[3, 3, 0, 0]} />}
-                                {comparePeriods.includes('Mayo') && <Bar dataKey="Mayo" fill="#10b981" radius={[3, 3, 0, 0]} />}
+                                {comparePeriods.includes('Septiembre') && <Bar isAnimationActive={false} dataKey="Septiembre" fill="#3b82f6" radius={[3, 3, 0, 0]} />}
+                                {comparePeriods.includes('Diciembre') && <Bar isAnimationActive={false} dataKey="Diciembre" fill="#f59e0b" radius={[3, 3, 0, 0]} />}
+                                {comparePeriods.includes('Mayo') && <Bar isAnimationActive={false} dataKey="Mayo" fill="#10b981" radius={[3, 3, 0, 0]} />}
                               </BarChart>
                             </ResponsiveContainer>
                           );
@@ -4251,21 +4252,108 @@ export default function Plantilla() {
                 </div>
               </div>
               
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button 
+                  onClick={() => {
+                    const element = document.getElementById('printable-player-report');
+                    const reportHtml = element ? element.innerHTML : '';
+                    if (reportHtml && selectedPlayerProfile) {
+                      const printWin = window.open('', '_blank', 'width=1200,height=900');
+                      if (printWin) {
+                        const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+                          .map(s => s.outerHTML)
+                          .join('\n');
+                        printWin.document.write(`
+                          <!DOCTYPE html>
+                          <html lang="es">
+                            <head>
+                              <meta charset="utf-8" />
+                              <title>Informe ${selectedPlayerProfile.nombre} ${selectedPlayerProfile.apellidos} - UD La Poveda</title>
+                              ${styles}
+                              <style>
+                                html, body {
+                                  background-color: #030712 !important;
+                                  color: #ffffff !important;
+                                  margin: 0;
+                                  padding: 16px;
+                                  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+                                  -webkit-print-color-adjust: exact !important;
+                                  print-color-adjust: exact !important;
+                                }
+                                .print-only-container {
+                                  position: static !important;
+                                  left: auto !important;
+                                  top: auto !important;
+                                  width: 100% !important;
+                                  opacity: 1 !important;
+                                  pointer-events: auto !important;
+                                  display: block !important;
+                                  background-color: #030712 !important;
+                                  color: white !important;
+                                }
+                                svg {
+                                  display: block !important;
+                                  overflow: visible !important;
+                                  max-width: 100% !important;
+                                }
+                                .recharts-responsive-container {
+                                  width: 100% !important;
+                                  height: 100% !important;
+                                }
+                                .recharts-surface {
+                                  overflow: visible !important;
+                                }
+                                @media print {
+                                  body { background-color: #030712 !important; color: white !important; }
+                                  @page { size: landscape; margin: 10mm; }
+                                  .page-break { page-break-after: always; break-after: page; }
+                                }
+                              </style>
+                            </head>
+                            <body class="bg-[#030712] text-white">
+                              <div class="print-only-container p-6 bg-[#030712] text-white">
+                                ${reportHtml}
+                              </div>
+                              <script>
+                                window.onload = function() {
+                                  setTimeout(function() {
+                                    window.focus();
+                                    window.print();
+                                  }, 400);
+                                };
+                              </script>
+                            </body>
+                          </html>
+                        `);
+                        printWin.document.close();
+                        return;
+                      }
+                    }
+                    window.focus();
+                    window.print();
+                  }}
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold uppercase rounded-xl px-4 py-2 flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Descargar / Guardar PDF</span>
+                </Button>
+
+                <Button 
+                  type="button"
                   onClick={() => {
                     window.focus();
                     window.print();
                   }}
-                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase rounded-xl px-4 py-2 flex items-center gap-1.5 transition-all shadow-md"
+                  className="bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold uppercase rounded-xl px-4 py-2 flex items-center gap-1.5 transition-all shadow-md cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>Imprimir / Guardar PDF</span>
+                  <span>Imprimir Informe</span>
                 </Button>
+
                 <Button 
                   variant="outline"
                   onClick={() => setShowPrintPreview(false)}
-                  className="text-xs border-slate-800 text-slate-400 hover:text-white rounded-xl px-4 py-2"
+                  className="text-xs border-slate-800 text-slate-400 hover:text-white rounded-xl px-4 py-2 cursor-pointer"
                 >
                   Cerrar Vista Previa
                 </Button>
@@ -4274,10 +4362,9 @@ export default function Plantilla() {
 
             {/* Iframe advice notice */}
             <div className="bg-blue-950/40 border border-blue-900/30 rounded-2xl p-4 space-y-2 text-xs text-blue-300 text-left">
-              <span className="font-bold uppercase tracking-wider block text-[10px] text-blue-400">💡 Consejo de Impresión en Navegadores:</span>
+              <span className="font-bold uppercase tracking-wider block text-[10px] text-blue-400">💡 Descarga y Generación Directa de PDF:</span>
               <p className="leading-relaxed text-[11px]">
-                Los navegadores suelen bloquear la impresión integrada desde paneles reducidos (como el iframe de AI Studio). 
-                Si al pulsar <strong>"Imprimir / Guardar PDF"</strong> no se abre el diálogo de impresión, por favor haz clic en el botón <strong>"Abrir en pestaña nueva"</strong> situado en la esquina superior derecha del panel de desarrollo para usar la app en pantalla completa y poder imprimir sin restricciones de seguridad.
+                Haz clic en el botón verde <strong>"Descargar / Guardar PDF"</strong> para abrir una ventana directa con la ficha del jugador/a lista para guardar en PDF o imprimir inmediatamente, sin necesidad de iniciar sesión nuevamente.
               </p>
             </div>
 
@@ -4579,7 +4666,14 @@ export default function Plantilla() {
       {/* Printable Style Block */}
       <style>{`
         .print-only-container {
-          display: none !important;
+          position: absolute !important;
+          left: 0 !important;
+          top: 0 !important;
+          width: 1200px !important;
+          opacity: 0.001 !important;
+          pointer-events: none !important;
+          z-index: -9999 !important;
+          overflow: visible !important;
         }
         @media print {
           html, body {
@@ -4593,11 +4687,19 @@ export default function Plantilla() {
             display: none !important;
           }
           .print-only-container {
+            position: static !important;
+            left: auto !important;
+            top: auto !important;
+            width: 100% !important;
+            opacity: 1 !important;
+            pointer-events: auto !important;
+            overflow: visible !important;
+            z-index: auto !important;
             display: block !important;
             background-color: #030712 !important;
             background: #030712 !important;
             color: white !important;
-            padding: 40px !important;
+            padding: 20px !important;
           }
           .page-break {
             page-break-after: always;
