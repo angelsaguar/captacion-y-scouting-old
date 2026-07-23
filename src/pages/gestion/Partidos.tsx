@@ -1567,11 +1567,12 @@ ${citObs || '• Acudir con puntualidad.\n• Confirmar asistencia en el grupo.'
                             {selectedTeam} • {showConvocatoriaModal.competicion}
                           </p>
 
-                          <div className="flex items-center justify-center gap-2 text-xs">
-                            <span className="font-extrabold text-slate-100 bg-blue-900/80 px-2.5 py-1 rounded-lg border border-slate-300/30">
-                              📅 {showConvocatoriaModal.fecha}
+                          <div className="flex flex-wrap items-center justify-center gap-2 text-xs">
+                            <span className="inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 font-extrabold text-slate-100 bg-blue-900/80 px-3 py-1 rounded-lg border border-slate-300/30 shadow-sm">
+                              <span>📅</span>
+                              <span>{showConvocatoriaModal.fecha ? (showConvocatoriaModal.fecha.includes('-') ? showConvocatoriaModal.fecha.split('-').reverse().join('/') : showConvocatoriaModal.fecha) : ''}</span>
                             </span>
-                            <span className={`text-[10px] font-black px-2.5 py-1 rounded-lg uppercase shadow-sm border border-slate-200/40 ${
+                            <span className={`inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 text-[10px] font-black px-2.5 py-1 rounded-lg uppercase shadow-sm border border-slate-200/40 ${
                               showConvocatoriaModal.tipo === 'Local' ? 'bg-blue-600 text-white' : 'bg-slate-700 text-slate-100'
                             }`}>
                               {showConvocatoriaModal.tipo === 'Local' ? '🏠 PARTIDO EN CASA' : '🚌 PARTIDO FUERA'}
