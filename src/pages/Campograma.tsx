@@ -1089,20 +1089,12 @@ export default function Campograma() {
             Campograma de Equipos
           </h1>
           <p className="text-slate-400 text-sm mt-1 font-sans">
-            Planifica sistemas tácticos de Fútbol 11 y Fútbol 7. Gestiona las plantillas de los equipos del club y colócalas en la pizarra para enviar a WhatsApp.
+            Planifica sistemas tácticos de Fútbol 11 y Fútbol 7. Gestiona las plantillas de los equipos del club y colócalas en la pizarra táctica.
           </p>
         </div>
         
         {/* Quick share actions */}
         <div className="flex flex-wrap gap-2">
-          <Button
-            size="sm"
-            onClick={copyWhatsAppToClipboard}
-            className="bg-green-600 hover:bg-green-500 text-white font-bold text-xs uppercase cursor-pointer"
-          >
-            <Clipboard className="w-4 h-4 mr-1.5" />
-            Copiar Convocatoria WhatsApp
-          </Button>
           <Button
             size="sm"
             onClick={handleAutoAssign}
@@ -1654,7 +1646,7 @@ export default function Campograma() {
                       <HelpCircle className="w-5 h-5 text-indigo-400 shrink-0 mt-0.5" />
                       <div className="text-[10px] text-slate-400 leading-normal">
                         <strong className="text-white block font-bold mb-0.5">💡 ¿Cómo funciona la alineación?</strong>
-                        Haz clic en los círculos tácticos en el campo para asignar a estos jugadores. Los no asignados quedarán rotulados como suplentes. Puedes copiar el resumen directamente para WhatsApp.
+                        Haz clic en los círculos tácticos en el campo para asignar a estos jugadores. Los no asignados quedarán rotulados como suplentes.
                       </div>
                     </div>
                   )}
