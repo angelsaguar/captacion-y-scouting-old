@@ -32,6 +32,7 @@ import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import UDLaPovedaLogo from '@/components/layout/UDLaPovedaLogo';
+import TeamMonthlyCalendar from '@/components/gestion/TeamMonthlyCalendar';
 import {
   ResponsiveContainer,
   BarChart,
@@ -1982,6 +1983,7 @@ const calculateFifaStatsFromScouting = (position: string, scoutAttrs: Record<str
 
 export default function Plantilla() {
   const [selectedTeam, setSelectedTeam] = useState<string>(CLUB_TEAMS[0]);
+  const [subView, setSubView] = useState<'roster' | 'calendar'>('roster');
   const [players, setPlayers] = useState<TeamPlayer[]>([]);
   const [scoutingSignedPlayers, setScoutingSignedPlayers] = useState<Player[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
@@ -2952,7 +2954,10 @@ export default function Plantilla() {
           </Button>
 
           <Button 
-            onClick={() => setShowAddForm(!showAddForm)}
+            onClick={() => {
+              setSubView('roster');
+              setShowAddForm(!showAddForm);
+            }}
             className="flex-1 sm:flex-none text-xs font-bold uppercase tracking-wider bg-blue-600 hover:bg-blue-500 flex items-center gap-2"
           >
             <Plus className="w-4 h-4" />
@@ -2961,261 +2966,297 @@ export default function Plantilla() {
         </div>
       </div>
 
-      {/* Add Player Form */}
-      {showAddForm && (
-        <form onSubmit={handleAddPlayer} className="bg-slate-900/40 border border-slate-900 p-6 rounded-2xl space-y-4 animate-in slide-in-from-top duration-200">
-          <h4 className="text-sm font-extrabold uppercase text-white tracking-wide flex items-center gap-2 mb-4">
-            <UserPlus className="w-4 h-4 text-blue-500" />
-            <span>Datos de la nueva jugadora</span>
-          </h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Nombre *</label>
-              <input 
-                type="text" 
-                required
-                value={formData.nombre}
-                onChange={(e) => setFormData({...formData, nombre: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-                placeholder="Ej. Carlos"
-              />
-            </div>
+      {/* Sub-view Switcher: Plantilla vs Calendario Mensual FIFA */}
+      <div className="flex items-center gap-2 bg-slate-900/40 p-1.5 rounded-2xl border border-slate-900 w-fit">
+        <button
+          onClick={() => setSubView('roster')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+            subView === 'roster' 
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" 
+              : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+          )}
+        >
+          <Users className="w-4 h-4" />
+          <span>Plantilla ({players.length})</span>
+        </button>
 
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Apellidos *</label>
-              <input 
-                type="text" 
-                required
-                value={formData.apellidos}
-                onChange={(e) => setFormData({...formData, apellidos: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-                placeholder="Ej. Gómez Ruiz"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Dorsal</label>
-              <input 
-                type="text" 
-                value={formData.dorsal}
-                onChange={(e) => setFormData({...formData, dorsal: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-                placeholder="Ej. 10"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Posición Principal</label>
-              <select 
-                value={formData.posicion}
-                onChange={(e) => setFormData({...formData, posicion: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-              >
-                <option value="PORTERO">PORTERO</option>
-                <option value="CENTRAL">CENTRAL</option>
-                <option value="LATERAL">LATERAL</option>
-                <option value="MEDIO CENTRO DEFENSIVO">MEDIO CENTRO DEFENSIVO</option>
-                <option value="INTERIOR">INTERIOR</option>
-                <option value="MEDIA PUNTA">MEDIA PUNTA</option>
-                <option value="EXTREMO">EXTREMO</option>
-                <option value="DELANTERO">DELANTERO</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Año de Nacimiento</label>
-              <input 
-                type="number" 
-                value={formData.anio_nacimiento}
-                onChange={(e) => setFormData({...formData, anio_nacimiento: parseInt(e.target.value) || 2005})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Lateralidad</label>
-              <select 
-                value={formData.lateralidad}
-                onChange={(e) => setFormData({...formData, lateralidad: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-              >
-                <option value="Derecho">Derecho</option>
-                <option value="Izquierdo">Izquierdo</option>
-                <option value="Ambidiestro">Ambidiestro</option>
-              </select>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Foto de Perfil (Max 3MB)</label>
-              <div className="flex gap-2 mt-1">
-                <input 
-                  type="url" 
-                  value={formData.foto_url}
-                  onChange={(e) => setFormData({...formData, foto_url: e.target.value})}
-                  className="flex-1 bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all"
-                  placeholder="https://images.unsplash.com/... o sube un archivo"
-                />
-                <label className="bg-slate-850 hover:bg-slate-850 border border-slate-750 text-[11px] font-bold text-slate-200 px-3 flex items-center justify-center rounded-xl cursor-pointer hover:bg-slate-800 transition-colors">
-                  <span>Sube</span>
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (file) {
-                        if (file.size > 3 * 1024 * 1024) {
-                          toast.error('La foto es demasiado grande. El límite es de 3MB.');
-                          return;
-                        }
-                        const reader = new FileReader();
-                        reader.onloadend = () => {
-                          setFormData({...formData, foto_url: reader.result as string});
-                          toast.success('Foto cargada correctamente.');
-                        };
-                        reader.readAsDataURL(file);
-                      }
-                    }}
-                  />
-                </label>
-              </div>
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Teléfono</label>
-              <input 
-                type="tel" 
-                value={formData.telefono}
-                onChange={(e) => setFormData({...formData, telefono: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-                placeholder="+34 600..."
-              />
-            </div>
-
-            <div>
-              <label className="text-xs font-semibold text-slate-400">Correo Electrónico</label>
-              <input 
-                type="email" 
-                value={formData.email}
-                onChange={(e) => setFormData({...formData, email: e.target.value})}
-                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
-                placeholder="jugador@ejemplo.com"
-              />
-            </div>
-          </div>
-
-          <div className="flex justify-end gap-2 pt-2">
-            <Button 
-              type="button" 
-              variant="outline" 
-              onClick={() => setShowAddForm(false)}
-              className="text-xs border-slate-800 text-slate-300"
-            >
-              Cancelar
-            </Button>
-            <Button 
-              type="submit" 
-              className="text-xs bg-blue-600 hover:bg-blue-500 text-white"
-            >
-              Guardar Jugadora
-            </Button>
-          </div>
-        </form>
-      )}
-
-      {/* Roster Search Bar */}
-      <div className="relative">
-        <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
-        <input 
-          type="text" 
-          placeholder="Buscar jugadora por nombre, dorsal o posición..."
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          className="w-full bg-slate-900/30 border border-slate-900 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-medium"
-        />
+        <button
+          onClick={() => setSubView('calendar')}
+          className={cn(
+            "flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all cursor-pointer",
+            subView === 'calendar' 
+              ? "bg-blue-600 text-white shadow-lg shadow-blue-600/30" 
+              : "text-slate-400 hover:text-white hover:bg-slate-800/60"
+          )}
+        >
+          <CalendarDays className="w-4 h-4 text-amber-400" />
+          <span>Calendario Mensual (Estilo FIFA)</span>
+        </button>
       </div>
 
-      {/* Players list Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {filteredPlayers.length > 0 ? (
-          filteredPlayers.map((player) => (
-            <div 
-              key={player.id} 
-              onClick={() => setSelectedPlayerProfile(player)}
-              className="bg-slate-900/40 border border-slate-900 hover:border-blue-500/50 rounded-2xl p-4 flex flex-col justify-between hover:shadow-lg hover:shadow-blue-500/5 transition-all gap-4 cursor-pointer group"
-            >
-              <div className="flex gap-4 items-start">
-                <div className="w-16 h-16 rounded-xl bg-slate-950 border border-slate-850 overflow-hidden flex-shrink-0 flex items-center justify-center relative">
-                  {player.foto_url ? (
-                    <img 
-                      src={player.foto_url} 
-                      alt={player.nombre} 
-                      className="w-full h-full object-cover"
-                      referrerPolicy="no-referrer"
-                    />
-                  ) : (
-                    <Users className="w-8 h-8 text-slate-600" />
-                  )}
-                  <span className="absolute bottom-1 right-1 bg-blue-600 text-white text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border border-slate-950">
-                    {player.dorsal}
-                  </span>
+      {/* Content View */}
+      {subView === 'calendar' ? (
+        <TeamMonthlyCalendar selectedTeam={selectedTeam} />
+      ) : (
+        <>
+          {/* Add Player Form */}
+          {showAddForm && (
+            <form onSubmit={handleAddPlayer} className="bg-slate-900/40 border border-slate-900 p-6 rounded-2xl space-y-4 animate-in slide-in-from-top duration-200">
+              <h4 className="text-sm font-extrabold uppercase text-white tracking-wide flex items-center gap-2 mb-4">
+                <UserPlus className="w-4 h-4 text-blue-500" />
+                <span>Datos de la nueva jugadora</span>
+              </h4>
+              
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Nombre *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={formData.nombre}
+                    onChange={(e) => setFormData({...formData, nombre: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                    placeholder="Ej. Carlos"
+                  />
                 </div>
 
-                <div className="flex-1 min-w-0">
-                  <h5 className="font-bold text-white text-sm truncate uppercase tracking-tight group-hover:text-blue-400 transition-colors">{player.nombre} {player.apellidos}</h5>
-                  <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mt-0.5">{player.posicion}</p>
-                  
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    <span className="inline-flex items-center gap-1 text-[9px] bg-slate-950 text-slate-400 border border-slate-850 rounded-full px-2 py-0.5 font-semibold">
-                      <CalendarDays className="w-2.5 h-2.5" />
-                      <span>{player.anio_nacimiento || 'N/A'}</span>
-                    </span>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Apellidos *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={formData.apellidos}
+                    onChange={(e) => setFormData({...formData, apellidos: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                    placeholder="Ej. Gómez Ruiz"
+                  />
+                </div>
 
-                    <span className="inline-flex items-center gap-1 text-[9px] bg-slate-950 text-slate-400 border border-slate-850 rounded-full px-2 py-0.5 font-semibold">
-                      <Shirt className="w-2.5 h-2.5" />
-                      <span>{player.lateralidad || 'Derecho'}</span>
-                    </span>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Dorsal</label>
+                  <input 
+                    type="text" 
+                    value={formData.dorsal}
+                    onChange={(e) => setFormData({...formData, dorsal: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                    placeholder="Ej. 10"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Posición Principal</label>
+                  <select 
+                    value={formData.posicion}
+                    onChange={(e) => setFormData({...formData, posicion: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                  >
+                    <option value="PORTERO">PORTERO</option>
+                    <option value="CENTRAL">CENTRAL</option>
+                    <option value="LATERAL">LATERAL</option>
+                    <option value="MEDIO CENTRO DEFENSIVO">MEDIO CENTRO DEFENSIVO</option>
+                    <option value="INTERIOR">INTERIOR</option>
+                    <option value="MEDIA PUNTA">MEDIA PUNTA</option>
+                    <option value="EXTREMO">EXTREMO</option>
+                    <option value="DELANTERO">DELANTERO</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Año de Nacimiento</label>
+                  <input 
+                    type="number" 
+                    value={formData.anio_nacimiento}
+                    onChange={(e) => setFormData({...formData, anio_nacimiento: parseInt(e.target.value) || 2005})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Lateralidad</label>
+                  <select 
+                    value={formData.lateralidad}
+                    onChange={(e) => setFormData({...formData, lateralidad: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                  >
+                    <option value="Derecho">Derecho</option>
+                    <option value="Izquierdo">Izquierdo</option>
+                    <option value="Ambidiestro">Ambidiestro</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Foto de Perfil (Max 3MB)</label>
+                  <div className="flex gap-2 mt-1">
+                    <input 
+                      type="url" 
+                      value={formData.foto_url}
+                      onChange={(e) => setFormData({...formData, foto_url: e.target.value})}
+                      className="flex-1 bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all"
+                      placeholder="https://images.unsplash.com/... o sube un archivo"
+                    />
+                    <label className="bg-slate-850 hover:bg-slate-850 border border-slate-750 text-[11px] font-bold text-slate-200 px-3 flex items-center justify-center rounded-xl cursor-pointer hover:bg-slate-800 transition-colors">
+                      <span>Sube</span>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (file) {
+                            if (file.size > 3 * 1024 * 1024) {
+                              toast.error('La foto es demasiado grande. El límite es de 3MB.');
+                              return;
+                            }
+                            const reader = new FileReader();
+                            reader.onloadend = () => {
+                              setFormData({...formData, foto_url: reader.result as string});
+                              toast.success('Foto cargada correctamente.');
+                            };
+                            reader.readAsDataURL(file);
+                          }
+                        }}
+                      />
+                    </label>
                   </div>
                 </div>
-              </div>
 
-              {/* Status and Actions */}
-              <div className="border-t border-slate-900 pt-3 flex items-center justify-between">
-                <div className="flex items-center gap-1.5">
-                  <span className={`w-2.5 h-2.5 rounded-full ${
-                    player.estado_fisico === 'Disponible' ? 'bg-emerald-500' :
-                    player.estado_fisico === 'Lesionado' ? 'bg-red-500' : 'bg-amber-500'
-                  }`} />
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{player.estado_fisico}</span>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Teléfono</label>
+                  <input 
+                    type="tel" 
+                    value={formData.telefono}
+                    onChange={(e) => setFormData({...formData, telefono: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                    placeholder="+34 600..."
+                  />
                 </div>
 
-                <div className="flex items-center gap-1">
-                  <span className="text-[9px] text-blue-400 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity mr-2">Ver Ficha →</span>
-                  <Button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setPlayerToDelete(player);
-                    }}
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg cursor-pointer"
-                    title="Eliminar de la plantilla"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                <div>
+                  <label className="text-xs font-semibold text-slate-400">Correo Electrónico</label>
+                  <input 
+                    type="email" 
+                    value={formData.email}
+                    onChange={(e) => setFormData({...formData, email: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                    placeholder="jugador@ejemplo.com"
+                  />
                 </div>
               </div>
-            </div>
-          ))
-        ) : (
-          <div className="col-span-full py-12 text-center bg-slate-900/10 border border-dashed border-slate-900 rounded-3xl flex flex-col items-center justify-center gap-2">
-            <Users className="w-12 h-12 text-slate-700" />
-            <h5 className="font-bold text-white text-sm uppercase">Sin jugadoras registradas</h5>
-            <p className="text-xs text-slate-500 max-w-xs mx-auto">Añade jugadoras manualmente o importa tus fichajes desde el apartado de scouting.</p>
+
+              <div className="flex justify-end gap-2 pt-2">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setShowAddForm(false)}
+                  className="text-xs border-slate-800 text-slate-300"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="text-xs bg-blue-600 hover:bg-blue-500 text-white"
+                >
+                  Guardar Jugadora
+                </Button>
+              </div>
+            </form>
+          )}
+
+          {/* Roster Search Bar */}
+          <div className="relative">
+            <Search className="absolute left-3.5 top-3 w-4 h-4 text-slate-500" />
+            <input 
+              type="text" 
+              placeholder="Buscar jugadora por nombre, dorsal o posición..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full bg-slate-900/30 border border-slate-900 rounded-2xl pl-10 pr-4 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-medium"
+            />
           </div>
-        )}
-      </div>
+
+          {/* Players list Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {filteredPlayers.length > 0 ? (
+              filteredPlayers.map((player) => (
+                <div 
+                  key={player.id} 
+                  onClick={() => setSelectedPlayerProfile(player)}
+                  className="bg-slate-900/40 border border-slate-900 hover:border-blue-500/50 rounded-2xl p-4 flex flex-col justify-between hover:shadow-lg hover:shadow-blue-500/5 transition-all gap-4 cursor-pointer group"
+                >
+                  <div className="flex gap-4 items-start">
+                    <div className="w-16 h-16 rounded-xl bg-slate-950 border border-slate-850 overflow-hidden flex-shrink-0 flex items-center justify-center relative">
+                      {player.foto_url ? (
+                        <img 
+                          src={player.foto_url} 
+                          alt={player.nombre} 
+                          className="w-full h-full object-cover"
+                          referrerPolicy="no-referrer"
+                        />
+                      ) : (
+                        <Users className="w-8 h-8 text-slate-600" />
+                      )}
+                      <span className="absolute bottom-1 right-1 bg-blue-600 text-white text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border border-slate-950">
+                        {player.dorsal}
+                      </span>
+                    </div>
+
+                    <div className="flex-1 min-w-0">
+                      <h5 className="font-bold text-white text-sm truncate uppercase tracking-tight group-hover:text-blue-400 transition-colors">{player.nombre} {player.apellidos}</h5>
+                      <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mt-0.5">{player.posicion}</p>
+                      
+                      <div className="flex flex-wrap gap-2 mt-2">
+                        <span className="inline-flex items-center gap-1 text-[9px] bg-slate-950 text-slate-400 border border-slate-850 rounded-full px-2 py-0.5 font-semibold">
+                          <CalendarDays className="w-2.5 h-2.5" />
+                          <span>{player.anio_nacimiento || 'N/A'}</span>
+                        </span>
+
+                        <span className="inline-flex items-center gap-1 text-[9px] bg-slate-950 text-slate-400 border border-slate-850 rounded-full px-2 py-0.5 font-semibold">
+                          <Shirt className="w-2.5 h-2.5" />
+                          <span>{player.lateralidad || 'Derecho'}</span>
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Status and Actions */}
+                  <div className="border-t border-slate-900 pt-3 flex items-center justify-between">
+                    <div className="flex items-center gap-1.5">
+                      <span className={`w-2.5 h-2.5 rounded-full ${
+                        player.estado_fisico === 'Disponible' ? 'bg-emerald-500' :
+                        player.estado_fisico === 'Lesionado' ? 'bg-red-500' : 'bg-amber-500'
+                      }`} />
+                      <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{player.estado_fisico}</span>
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <span className="text-[9px] text-blue-400 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity mr-2">Ver Ficha →</span>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setPlayerToDelete(player);
+                        }}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg cursor-pointer"
+                        title="Eliminar de la plantilla"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="col-span-full py-12 text-center bg-slate-900/10 border border-dashed border-slate-900 rounded-3xl flex flex-col items-center justify-center gap-2">
+                <Users className="w-12 h-12 text-slate-700" />
+                <h5 className="font-bold text-white text-sm uppercase">Sin jugadoras registradas</h5>
+                <p className="text-xs text-slate-500 max-w-xs mx-auto">Añade jugadoras manualmente o importa tus fichajes desde el apartado de scouting.</p>
+              </div>
+            )}
+          </div>
+        </>
+      )}
 
       {/* Import Scouting Fichados Dialog */}
       {showImportDialog && (
