@@ -135,7 +135,16 @@ export default function PlayerDetail() {
         if (error) throw error;
       } catch (dbError: any) {
         console.warn('Handling Supabase update failover:', dbError);
-        const { apodo, equipo_asignado, observador, ...fallbackPayload } = payload;
+        const { 
+          fecha_nacimiento, 
+          apodo, 
+          equipo_asignado, 
+          observador, 
+          email, 
+          contacto_tipo, 
+          ...fallbackPayload 
+        } = payload;
+
         const { error: retryError } = await supabase
           .from('players')
           .update(fallbackPayload)

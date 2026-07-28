@@ -343,8 +343,18 @@ export default function PlayerForm() {
         
         if (isColumnError) {
           console.warn('Failing over due to database schema misalignment:', dbError);
-          // Strip out equipo_asignado, observador, and email as safe fallback
-          const { equipo_asignado, observador, email, ...fallbackPayload } = playerPayload;
+          // Strip out optional columns that might not exist in remote schema cache
+          const { 
+            fecha_nacimiento, 
+            apodo, 
+            equipo_asignado, 
+            observador, 
+            email, 
+            contacto_tipo, 
+            fecha_seguimiento, 
+            motivos_rechazo, 
+            ...fallbackPayload 
+          } = playerPayload;
           
           if (id) {
             const { error: retryError } = await supabase

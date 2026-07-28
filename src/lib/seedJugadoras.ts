@@ -60,8 +60,8 @@ export async function syncJugadorasToDatabaseAndLocalStorage() {
       try {
         const { error } = await supabase.from('players').upsert(payload);
         if (error) {
-          // Retry without fecha_nacimiento if column is missing in older schema
-          const { fecha_nacimiento, ...fallback } = payload;
+          // Retry without optional schema columns if missing in older database schema
+          const { fecha_nacimiento, equipo_asignado, ...fallback } = payload;
           await supabase.from('players').upsert(fallback);
         }
       } catch (err) {
