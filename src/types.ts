@@ -26,6 +26,7 @@ export interface Player {
   posicion: string;
   lateralidad?: Lateralidad;
   anio_nacimiento?: number;
+  fecha_nacimiento?: string;
   foto_url?: string;
   observaciones?: string;
   motivos_rechazo?: string;

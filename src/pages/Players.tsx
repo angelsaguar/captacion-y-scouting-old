@@ -479,12 +479,23 @@ export default function Players() {
                   </span>
                 </div>
 
-                {player.observador && (
-                  <div className="flex justify-between items-center text-[10px] text-slate-500 font-bold uppercase tracking-wider pb-1">
-                    <span>Obs:</span>
-                    <span className="text-slate-300 font-black truncate max-w-[150px]">{player.observador}</span>
-                  </div>
-                )}
+                <div className="flex justify-between items-center text-[10px] text-slate-400 font-medium">
+                  {player.fecha_nacimiento ? (
+                    <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-300 font-mono text-[9px]">
+                      F. Nac: {player.fecha_nacimiento}
+                    </span>
+                  ) : player.anio_nacimiento ? (
+                    <span className="bg-slate-950 px-2 py-0.5 rounded border border-slate-800 text-slate-400 font-mono text-[9px]">
+                      Año: {player.anio_nacimiento}
+                    </span>
+                  ) : <span />}
+
+                  {player.observador && (
+                    <span className="text-slate-400 font-bold truncate max-w-[130px]">
+                      Obs: {player.observador}
+                    </span>
+                  )}
+                </div>
                 
                 <div className="flex gap-2">
                   <Link to={`/players/${player.id}`} className="flex-1">

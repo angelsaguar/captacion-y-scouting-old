@@ -62,6 +62,7 @@ interface TeamPlayer {
   posicion: string;
   foto_url?: string;
   anio_nacimiento?: number;
+  fecha_nacimiento?: string;
   lateralidad?: string;
   telefono?: string;
   email?: string;
@@ -3468,12 +3469,22 @@ export default function Plantilla() {
                   <p className="text-xs text-blue-400 font-bold uppercase tracking-wider">
                     {selectedPlayerProfile.posicion} • Dorsal {selectedPlayerProfile.dorsal}
                   </p>
-                  <div className="flex items-center justify-center sm:justify-start gap-2 pt-1">
+                  <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2 pt-1 text-[11px] text-slate-300">
                     <span className={`w-2.5 h-2.5 rounded-full ${
                       selectedPlayerProfile.estado_fisico === 'Disponible' ? 'bg-emerald-500' :
                       selectedPlayerProfile.estado_fisico === 'Lesionado' ? 'bg-red-500' : 'bg-amber-500'
                     }`} />
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedPlayerProfile.estado_fisico}</span>
+                    {selectedPlayerProfile.fecha_nacimiento && (
+                      <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[10px] font-mono font-semibold">
+                        F. Nac: {selectedPlayerProfile.fecha_nacimiento}
+                      </span>
+                    )}
+                    {selectedPlayerProfile.anio_nacimiento && !selectedPlayerProfile.fecha_nacimiento && (
+                      <span className="bg-slate-800 text-slate-300 px-2 py-0.5 rounded text-[10px] font-mono font-semibold">
+                        Año: {selectedPlayerProfile.anio_nacimiento}
+                      </span>
+                    )}
                   </div>
                 </div>
 

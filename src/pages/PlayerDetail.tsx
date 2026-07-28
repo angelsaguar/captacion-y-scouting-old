@@ -87,6 +87,7 @@ export default function PlayerDetail() {
         equipo_actual: player.equipo_actual || '',
         equipo_asignado: player.equipo_asignado || '',
         anio_nacimiento: player.anio_nacimiento,
+        fecha_nacimiento: player.fecha_nacimiento || '',
         telefono: player.telefono || '',
         email: player.email || '',
         contacto_tipo: player.contacto_tipo || 'Tutor',
@@ -116,6 +117,7 @@ export default function PlayerDetail() {
         equipo_actual: editPersonalData.equipo_actual?.trim() || null,
         equipo_asignado: editPersonalData.equipo_asignado?.trim() || null,
         anio_nacimiento: editPersonalData.anio_nacimiento || null,
+        fecha_nacimiento: editPersonalData.fecha_nacimiento?.trim() || null,
         telefono: editPersonalData.telefono?.trim() || null,
         email: editPersonalData.email?.trim() || null,
         contacto_tipo: editPersonalData.contacto_tipo || 'Tutor',
@@ -516,7 +518,11 @@ export default function PlayerDetail() {
                     UD Poveda: {player.equipo_asignado}
                   </span>
                 )}
-                {player.anio_nacimiento && <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Gen {player.anio_nacimiento}</span>}
+                {player.fecha_nacimiento ? (
+                  <span className="flex items-center gap-1 text-slate-300 font-bold"><Calendar className="w-3 h-3 text-blue-400" /> Nac: {player.fecha_nacimiento}</span>
+                ) : player.anio_nacimiento ? (
+                  <span className="flex items-center gap-1"><Calendar className="w-3 h-3" /> Gen {player.anio_nacimiento}</span>
+                ) : null}
               </div>
             </div>
           </div>
@@ -1207,6 +1213,16 @@ export default function PlayerDetail() {
                     <option value="Fichado">Fichado</option>
                     <option value="Rechazado">Rechazado</option>
                   </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Fecha de Nacimiento</label>
+                  <input 
+                    type="text" 
+                    value={editPersonalData.fecha_nacimiento || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, fecha_nacimiento: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="Ej. 23/08/2005"
+                  />
                 </div>
                 <div>
                   <label className="text-xs font-semibold text-slate-300 block mb-1">Año de Nacimiento</label>

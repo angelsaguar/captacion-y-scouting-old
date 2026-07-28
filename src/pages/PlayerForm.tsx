@@ -61,6 +61,7 @@ import { getObservers, addObserver } from '@/lib/observers';
   posicion: z.string().min(1, 'Posición requerida'),
   lateralidad: z.enum(['Izquierdo', 'Derecho', 'Ambidiestro']),
   anio_nacimiento: z.number().int().min(1900).max(2026).optional(),
+  fecha_nacimiento: z.string().nullable().optional(),
   foto_url: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
   motivos_rechazo: z.string().nullable().optional(),
@@ -164,6 +165,7 @@ export default function PlayerForm() {
               posicion: player.posicion,
               lateralidad: player.lateralidad as any,
               anio_nacimiento: player.anio_nacimiento,
+              fecha_nacimiento: player.fecha_nacimiento || '',
               foto_url: player.foto_url || '',
               observaciones: player.observaciones || '',
               fecha_seguimiento: player.fecha_seguimiento || '',
@@ -312,6 +314,7 @@ export default function PlayerForm() {
         observaciones: values.observaciones || null,
         motivos_rechazo: values.motivos_rechazo || null,
         anio_nacimiento: values.anio_nacimiento || null,
+        fecha_nacimiento: values.fecha_nacimiento || null,
         observador: values.observador || null,
         created_by: id ? undefined : user?.id,
       };
