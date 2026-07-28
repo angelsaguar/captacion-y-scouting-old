@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Player, PlayerStatus, CLUB_TEAMS, Observer } from '@/types';
+import { JUGADORAS_ADJUNTAS } from '@/data/jugadorasData';
 import { getObservers } from '@/lib/observers';
 import { 
   Card, 
@@ -135,7 +136,39 @@ export default function Players() {
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      setPlayers(data || []);
+      let currentList: Player[] = data || [];
+
+      // If no search filter is active and list is missing any of the 15 official players, merge them
+      if (!search && !filterStatus && !filterPosition && !filterLateralidad && !filterBirthYear && !filterEquipoAsignado && !filterEquipoActual && !filterObservador) {
+        const officialConverted: Player[] = JUGADORAS_ADJUNTAS.map(j => ({
+          id: j.id,
+          nombre: j.nombre,
+          apellidos: j.apellidos,
+          posicion: j.posicion,
+          dorsal: j.dorsal,
+          lateralidad: j.lateralidad || 'Derecho',
+          anio_nacimiento: j.anio_nacimiento,
+          fecha_nacimiento: j.fecha_nacimiento,
+          foto_url: j.foto_url,
+          estado: 'Fichado',
+          potencial: j.potencial,
+          equipo_actual: j.equipo_actual || 'UD La Poveda',
+          equipo_asignado: 'SENIOR FEMENINO',
+          observaciones: `Posición principal: ${j.posicion_detalle}. Fecha nacimiento: ${j.fecha_nacimiento}`
+        }));
+
+        officialConverted.forEach(oj => {
+          const exists = currentList.some(p => 
+            p.nombre.trim().toLowerCase() === oj.nombre.trim().toLowerCase() && 
+            p.apellidos.trim().toLowerCase() === oj.apellidos.trim().toLowerCase()
+          );
+          if (!exists) {
+            currentList.push(oj);
+          }
+        });
+      }
+
+      setPlayers(currentList);
     } catch (error: any) {
       toast.error('Error al cargar jugadores');
     } finally {

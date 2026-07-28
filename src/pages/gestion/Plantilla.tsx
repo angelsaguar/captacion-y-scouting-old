@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from '@/lib/supabase';
 import { Player, CLUB_TEAMS, POSITION_STRUCTURED_ATTRIBUTES, COMMON_ATTRIBUTES } from '@/types';
+import { JUGADORAS_ADJUNTAS } from '@/data/jugadorasData';
 import { 
   Users, 
   Plus, 
@@ -2273,18 +2274,51 @@ export default function Plantilla() {
   useEffect(() => {
     const key = `team_roster_${selectedTeam}`;
     const saved = localStorage.getItem(key);
+
+    const officialTeamPlayers: TeamPlayer[] = JUGADORAS_ADJUNTAS.map(j => ({
+      id: j.id,
+      nombre: j.nombre,
+      apellidos: j.apellidos,
+      dorsal: j.dorsal,
+      posicion: j.posicion,
+      foto_url: j.foto_url,
+      anio_nacimiento: j.anio_nacimiento,
+      fecha_nacimiento: j.fecha_nacimiento,
+      lateralidad: j.lateralidad || 'Derecho',
+      estado_fisico: 'Disponible',
+      email: `${j.nombre.toLowerCase().replace(/\s+/g, '')}@povedafemenino.es`
+    }));
+
+    let currentRoster: TeamPlayer[] = [];
     if (saved) {
-      setPlayers(JSON.parse(saved));
-    } else {
-      // Default placeholder players for demo if empty
-      const defaults: TeamPlayer[] = [
-        { id: '1', nombre: 'Carlos', apellidos: 'López', dorsal: '10', posicion: 'DELANTERO', estado_fisico: 'Disponible', anio_nacimiento: 2005, lateralidad: 'Derecho', foto_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?q=80&w=200&auto=format&fit=crop' },
-        { id: '2', nombre: 'Sofía', apellidos: 'Martínez', dorsal: '8', posicion: 'MEDIA PUNTA', estado_fisico: 'Disponible', anio_nacimiento: 2006, lateralidad: 'Ambidiestro', foto_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=200&auto=format&fit=crop' },
-        { id: '3', nombre: 'Marcos', apellidos: 'Ruiz', dorsal: '4', posicion: 'CENTRAL', estado_fisico: 'Lesionado', anio_nacimiento: 2004, lateralidad: 'Derecho', foto_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?q=80&w=200&auto=format&fit=crop' }
-      ];
-      localStorage.setItem(key, JSON.stringify(defaults));
-      setPlayers(defaults);
+      try {
+        currentRoster = JSON.parse(saved);
+      } catch {}
     }
+
+    // Merge official 15 players if missing or if roster contains old demo entries
+    const isMissingOfficial = officialTeamPlayers.some(oj => 
+      !currentRoster.some(p => p.nombre.toLowerCase().trim() === oj.nombre.toLowerCase().trim() && p.apellidos.toLowerCase().trim() === oj.apellidos.toLowerCase().trim())
+    );
+    const hasDemo = currentRoster.some(p => p.nombre === 'Carlos' || p.nombre === 'Marcos' || (p.nombre === 'Marina' && p.apellidos === 'Sierra Garcia'));
+
+    if (currentRoster.length < 15 || isMissingOfficial || hasDemo) {
+      const merged: TeamPlayer[] = [...officialTeamPlayers];
+      currentRoster.forEach(p => {
+        const isDemo = p.nombre === 'Carlos' || p.nombre === 'Marcos' || (p.nombre === 'Marina' && p.apellidos === 'Sierra Garcia');
+        const alreadyInOfficial = officialTeamPlayers.some(oj => 
+          oj.nombre.toLowerCase().trim() === p.nombre.toLowerCase().trim() && 
+          oj.apellidos.toLowerCase().trim() === p.apellidos.toLowerCase().trim()
+        );
+        if (!isDemo && !alreadyInOfficial) {
+          merged.push(p);
+        }
+      });
+      currentRoster = merged;
+      localStorage.setItem(key, JSON.stringify(currentRoster));
+    }
+
+    setPlayers(currentRoster);
 
     const evaluationsKey = `team_evaluations_${selectedTeam}`;
     const savedEvaluations = localStorage.getItem(evaluationsKey);

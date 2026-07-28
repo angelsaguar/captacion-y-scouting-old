@@ -19,7 +19,7 @@ export interface JugadoraOficial {
 
 export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
   {
-    id: 'jugadora-laura-gutierrez',
+    id: '10000000-0000-4000-8000-000000000001',
     nombre: 'Laura',
     apellidos: 'Gutiérrez Valdericeda',
     fecha_nacimiento: '23/08/2005',
@@ -31,11 +31,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-lucia-sanchez',
+    id: '10000000-0000-4000-8000-000000000002',
     nombre: 'Lucía',
     apellidos: 'Sánchez Losada',
     fecha_nacimiento: '07/05/2005',
@@ -47,11 +47,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-carmen-rodriguez',
+    id: '10000000-0000-4000-8000-000000000003',
     nombre: 'Carmen',
     apellidos: 'Rodriguez Botella',
     fecha_nacimiento: '29/05/2004',
@@ -63,11 +63,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-laura-marin',
+    id: '10000000-0000-4000-8000-000000000004',
     nombre: 'Laura',
     apellidos: 'Marín Orell',
     fecha_nacimiento: '22/06/1999',
@@ -79,11 +79,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-maria-angeles-pareja',
+    id: '10000000-0000-4000-8000-000000000005',
     nombre: 'María Ángeles',
     apellidos: 'Pareja Aranda',
     fecha_nacimiento: '14/05/1996',
@@ -95,11 +95,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1494790108377-be9c29b29330?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-marina-fernandez',
+    id: '10000000-0000-4000-8000-000000000006',
     nombre: 'Marina',
     apellidos: 'Fernández Herreros',
     fecha_nacimiento: '10/05/2000',
@@ -111,11 +111,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-marina',
+    id: '10000000-0000-4000-8000-000000000007',
     nombre: 'Marina',
     apellidos: '',
     fecha_nacimiento: '22/05/2006',
@@ -127,11 +127,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-marta-pulido',
+    id: '10000000-0000-4000-8000-000000000008',
     nombre: 'Marta',
     apellidos: 'Marta Pulido',
     fecha_nacimiento: '01/02/1996',
@@ -143,11 +143,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-lucia-fernandez',
+    id: '10000000-0000-4000-8000-000000000009',
     nombre: 'Lucía',
     apellidos: 'Fernández Herreros',
     fecha_nacimiento: '22/11/2002',
@@ -159,11 +159,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1517841905240-472988babdf9?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-natalia-jimenez',
+    id: '10000000-0000-4000-8000-000000000010',
     nombre: 'Natalia',
     apellidos: 'Jiménez Serrano',
     fecha_nacimiento: '18/09/2002',
@@ -175,11 +175,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1524504388940-b1c1722653e1?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-marta-pastor',
+    id: '10000000-0000-4000-8000-000000000011',
     nombre: 'Marta',
     apellidos: 'Pastor León',
     fecha_nacimiento: '15/11/2006',
@@ -191,11 +191,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1544005313-94ddf0286df2?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-marta-nieto',
+    id: '10000000-0000-4000-8000-000000000012',
     nombre: 'Marta',
     apellidos: 'Nieto Agraz',
     fecha_nacimiento: '01/04/1998',
@@ -207,11 +207,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 4
   },
   {
-    id: 'jugadora-candela-paris',
+    id: '10000000-0000-4000-8000-000000000013',
     nombre: 'Candela',
     apellidos: 'Paris de la Peña Preira',
     fecha_nacimiento: '08/06/2009',
@@ -223,11 +223,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1508214751196-bcfd4ca60f91?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-laura-alcantara',
+    id: '10000000-0000-4000-8000-000000000014',
     nombre: 'Laura',
     apellidos: 'Alcántara',
     fecha_nacimiento: '25/12/2003',
@@ -239,11 +239,11 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1531746020798-e6953c6e8e04?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   },
   {
-    id: 'jugadora-sara-esquer',
+    id: '10000000-0000-4000-8000-000000000015',
     nombre: 'Sara',
     apellidos: 'Esquer Cañero',
     fecha_nacimiento: '24/08/2008',
@@ -255,7 +255,7 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
     foto_url: 'https://images.unsplash.com/photo-1529626455594-4ff0802cfb7e?q=80&w=300&auto=format&fit=crop',
     estado: 'Fichado',
     equipo_actual: 'UD La Poveda',
-    equipo_asignado: 'Sénior Femenino',
+    equipo_asignado: 'SENIOR FEMENINO',
     potencial: 5
   }
 ];
