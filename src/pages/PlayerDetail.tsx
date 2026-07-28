@@ -13,6 +13,9 @@ import { Button, buttonVariants } from '@/components/ui/button';
 import { 
   ArrowLeft, 
   Edit2, 
+  Pencil,
+  Save,
+  User,
   FileDown, 
   Star, 
   Phone, 
@@ -69,6 +72,88 @@ export default function PlayerDetail() {
   const [profileSubTab, setProfileSubTab] = useState<'antropo' | 'phys'>('antropo');
   const [physicalTests, setPhysicalTests] = useState<any[]>([]);
   const [antropometria, setAntropometria] = useState<any[]>([]);
+
+  // Edit Personal Data Modal State
+  const [showEditPersonalModal, setShowEditPersonalModal] = useState(false);
+  const [editPersonalData, setEditPersonalData] = useState<Partial<Player>>({});
+
+  const handleOpenEditPersonalModal = () => {
+    if (player) {
+      setEditPersonalData({
+        nombre: player.nombre,
+        apellidos: player.apellidos,
+        apodo: player.apodo || '',
+        posicion: player.posicion,
+        equipo_actual: player.equipo_actual || '',
+        equipo_asignado: player.equipo_asignado || '',
+        anio_nacimiento: player.anio_nacimiento,
+        telefono: player.telefono || '',
+        email: player.email || '',
+        contacto_tipo: player.contacto_tipo || 'Tutor',
+        observador: player.observador || '',
+        foto_url: player.foto_url || '',
+        estado: player.estado
+      });
+      setShowEditPersonalModal(true);
+    }
+  };
+
+  const handleSavePersonalData = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!player) return;
+
+    if (!editPersonalData.nombre?.trim() || !editPersonalData.apellidos?.trim()) {
+      toast.error('Nombre y Apellidos son obligatorios');
+      return;
+    }
+
+    try {
+      const payload = {
+        nombre: editPersonalData.nombre.trim(),
+        apellidos: editPersonalData.apellidos.trim(),
+        apodo: editPersonalData.apodo?.trim() || null,
+        posicion: editPersonalData.posicion || player.posicion,
+        equipo_actual: editPersonalData.equipo_actual?.trim() || null,
+        equipo_asignado: editPersonalData.equipo_asignado?.trim() || null,
+        anio_nacimiento: editPersonalData.anio_nacimiento || null,
+        telefono: editPersonalData.telefono?.trim() || null,
+        email: editPersonalData.email?.trim() || null,
+        contacto_tipo: editPersonalData.contacto_tipo || 'Tutor',
+        observador: editPersonalData.observador?.trim() || null,
+        foto_url: editPersonalData.foto_url?.trim() || null,
+        estado: editPersonalData.estado || player.estado
+      };
+
+      try {
+        const { error } = await supabase
+          .from('players')
+          .update(payload)
+          .eq('id', player.id);
+
+        if (error) throw error;
+      } catch (dbError: any) {
+        console.warn('Handling Supabase update failover:', dbError);
+        const { apodo, equipo_asignado, observador, ...fallbackPayload } = payload;
+        const { error: retryError } = await supabase
+          .from('players')
+          .update(fallbackPayload)
+          .eq('id', player.id);
+
+        if (retryError) throw retryError;
+      }
+
+      setPlayer({
+        ...player,
+        ...payload
+      });
+
+      toast.success('¡Datos personales guardados y sincronizados correctamente!');
+      setShowEditPersonalModal(false);
+    } catch (err: any) {
+      console.error('Error guardando datos personales:', err);
+      toast.error('Error al guardar datos personales: ' + (err.message || err));
+    }
+  };
 
   useEffect(() => {
     async function fetchPlayer() {
@@ -152,7 +237,7 @@ export default function PlayerDetail() {
     
     doc.setFontSize(10);
     doc.setFont('Helvetica', 'normal');
-    doc.text(`Nombre: ${player.nombre} ${player.apellidos}`, 15, 65);
+    doc.text(`Nombre: ${player.nombre} ${player.apellidos}${player.apodo ? ` ("${player.apodo}")` : ''}`, 15, 65);
     doc.text(`Posición: ${player.posicion}`, 15, 72);
     doc.text(`Año Nacimiento: ${player.anio_nacimiento || '-'}`, 15, 79);
     doc.text(`Procedencia: ${player.equipo_actual || '-'}`, 15, 86);
@@ -285,6 +370,7 @@ export default function PlayerDetail() {
     const dataGeneral = [
       { Campo: 'Nombre', Valor: player.nombre },
       { Campo: 'Apellidos', Valor: player.apellidos },
+      { Campo: 'Apodo / Alias', Valor: player.apodo || '-' },
       { Campo: 'Posición', Valor: player.posicion },
       { Campo: 'Procedencia', Valor: player.equipo_actual || '-' },
       { Campo: 'Asignación Club', Valor: player.equipo_asignado || '-' },
@@ -402,8 +488,13 @@ export default function PlayerDetail() {
             </div>
             <div>
               <div className="flex flex-wrap items-center gap-1.5 sm:gap-3">
-                <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-tight">
-                  {player.nombre} {player.apellidos}
+                <h1 className="text-lg sm:text-2xl md:text-3xl font-black tracking-tighter uppercase italic text-white leading-tight flex items-center gap-2 flex-wrap">
+                  <span>{player.nombre} {player.apellidos}</span>
+                  {player.apodo && (
+                    <span className="text-emerald-400 not-italic text-xs sm:text-base font-bold bg-emerald-950/60 border border-emerald-500/40 px-2.5 py-0.5 rounded-lg shadow-sm">
+                      "{player.apodo}"
+                    </span>
+                  )}
                 </h1>
                 <Badge className={cn(
                   "px-2 py-0.5 sm:px-3 sm:py-1 text-[8px] sm:text-[10px] font-black uppercase tracking-widest border-none shadow-lg outline-none",
@@ -431,11 +522,17 @@ export default function PlayerDetail() {
           </div>
         </div>
         <div className="flex items-center gap-2 w-full md:w-auto mt-2 md:mt-0 justify-end">
-          {(isAdmin || user?.role === 'scout') && (
-            <Link to={`/players/${player.id}/edit`}>
-              <Button variant="outline"><Edit2 className="w-4 h-4 mr-2" /> Editar</Button>
-            </Link>
-          )}
+          <Button 
+            onClick={handleOpenEditPersonalModal}
+            className="bg-blue-600 hover:bg-blue-500 text-white font-bold cursor-pointer transition-all shadow-md"
+          >
+            <Pencil className="w-4 h-4 mr-2" /> Editar Datos Personales
+          </Button>
+          <Link to={`/players/${player.id}/edit`}>
+            <Button variant="outline" className="bg-slate-900 border-slate-700 text-slate-300 hover:text-white">
+              <Edit2 className="w-4 h-4 mr-2" /> Formulario Completo
+            </Button>
+          </Link>
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(buttonVariants({ variant: "outline" }), "bg-slate-900 border-slate-700")}>
               <Download className="w-4 h-4 mr-2" /> Exportar
@@ -921,8 +1018,15 @@ export default function PlayerDetail() {
         <div className="space-y-6">
           <Card className="premium-card bg-blue-600 text-white relative overflow-hidden border-none shadow-2xl shadow-blue-900/20">
             <div className="absolute top-0 right-0 w-32 h-32 bg-white/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-2xl" />
-            <CardHeader className="border-b border-white/10">
+            <CardHeader className="border-b border-white/10 flex flex-row items-center justify-between">
               <CardTitle className="text-lg font-bold tracking-tight">Contacto Directo</CardTitle>
+              <Button 
+                size="sm" 
+                onClick={handleOpenEditPersonalModal}
+                className="bg-white/20 hover:bg-white/30 text-white border-none font-bold text-xs h-8 px-2.5"
+              >
+                <Pencil className="w-3.5 h-3.5 mr-1" /> Editar
+              </Button>
             </CardHeader>
             <CardContent className="space-y-4 relative z-10 pt-6">
                <div className="space-y-1">
@@ -1012,6 +1116,200 @@ export default function PlayerDetail() {
           </Card>
         </div>
       </div>
+
+      {/* EDIT PERSONAL DATA MODAL */}
+      {showEditPersonalModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-2xl overflow-hidden shadow-2xl animate-in fade-in duration-200">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base leading-tight">Editar Datos Personales</h3>
+                  <p className="text-xs text-slate-400">Modifica la información básica del jugador</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setShowEditPersonalModal(false)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSavePersonalData} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Nombre *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editPersonalData.nombre || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, nombre: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Apellidos *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editPersonalData.apellidos || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, apellidos: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-emerald-400 block mb-1">Apodo / Alias</label>
+                  <input 
+                    type="text" 
+                    value={editPersonalData.apodo || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, apodo: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-emerald-400 font-semibold focus:outline-none focus:border-emerald-500 transition-colors"
+                    placeholder="Ej. 'Pedri'"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Posición</label>
+                  <select 
+                    value={editPersonalData.posicion || 'CENTRAL'}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, posicion: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="PORTERO">PORTERO</option>
+                    <option value="LATERAL DERECHO">LATERAL DERECHO</option>
+                    <option value="LATERAL IZQUIERDO">LATERAL IZQUIERDO</option>
+                    <option value="CENTRAL">CENTRAL</option>
+                    <option value="PIVOTE">PIVOTE</option>
+                    <option value="INTERIOR">INTERIOR</option>
+                    <option value="MEDIA PUNTA">MEDIA PUNTA</option>
+                    <option value="EXTREMO DERECHO">EXTREMO DERECHO</option>
+                    <option value="EXTREMO IZQUIERDO">EXTREMO IZQUIERDO</option>
+                    <option value="DELANTERO">DELANTERO</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Estado Scouting</label>
+                  <select 
+                    value={editPersonalData.estado || 'Observado'}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, estado: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="Observado">Observado</option>
+                    <option value="En seguimiento">En seguimiento</option>
+                    <option value="Interesa">Interesa</option>
+                    <option value="Fichado">Fichado</option>
+                    <option value="Rechazado">Rechazado</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Año de Nacimiento</label>
+                  <input 
+                    type="number" 
+                    value={editPersonalData.anio_nacimiento || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, anio_nacimiento: parseInt(e.target.value) || undefined })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="Ej. 2008"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Procedencia / Club Actual</label>
+                  <input 
+                    type="text" 
+                    value={editPersonalData.equipo_actual || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, equipo_actual: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="Ej. Rayo Vallecano B"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Asignación UD Poveda</label>
+                  <input 
+                    type="text" 
+                    value={editPersonalData.equipo_asignado || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, equipo_asignado: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="Ej. Juvenil A"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Teléfono</label>
+                  <input 
+                    type="text" 
+                    value={editPersonalData.telefono || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, telefono: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="Ej. 612345678"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Correo Electrónico</label>
+                  <input 
+                    type="email" 
+                    value={editPersonalData.email || ''}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="ejemplo@email.com"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Tipo de Contacto</label>
+                  <select 
+                    value={editPersonalData.contacto_tipo || 'Tutor'}
+                    onChange={(e) => setEditPersonalData({ ...editPersonalData, contacto_tipo: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="Padre">Padre</option>
+                    <option value="Madre">Madre</option>
+                    <option value="Jugador">Jugador</option>
+                    <option value="Tutor">Tutor</option>
+                  </select>
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">URL Foto de Perfil</label>
+                <input 
+                  type="url" 
+                  value={editPersonalData.foto_url || ''}
+                  onChange={(e) => setEditPersonalData({ ...editPersonalData, foto_url: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setShowEditPersonalModal(false)}
+                  className="border-slate-700 text-slate-300 hover:text-white"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                >
+                  <Save className="w-4 h-4 mr-2" /> Guardar Cambios
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

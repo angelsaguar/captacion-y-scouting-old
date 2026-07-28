@@ -23,6 +23,7 @@ import {
   Clock,
   Shield,
   Edit,
+  Pencil,
   Save,
   Cloud,
   TrendingUp,
@@ -56,6 +57,7 @@ interface TeamPlayer {
   id: string;
   nombre: string;
   apellidos: string;
+  apodo?: string;
   dorsal: string;
   posicion: string;
   foto_url?: string;
@@ -506,6 +508,11 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
 
           <h2 className="text-3xl sm:text-4xl font-extrabold uppercase tracking-tight text-white leading-none">
             {player.nombre} <span className="text-blue-400">{player.apellidos}</span>
+            {player.apodo && (
+              <span className="block text-emerald-400 text-lg font-bold tracking-normal normal-case mt-1">
+                "{player.apodo}"
+              </span>
+            )}
           </h2>
           <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">
             {player.posicion} • DORSAL {player.dorsal}
@@ -549,6 +556,7 @@ function DetailedPerformanceDossier({ player, stats, allPlayers = [] }: { player
               </div>
               <div>
                 <h3 className="text-lg font-black uppercase leading-none">{player.nombre} {player.apellidos}</h3>
+                {player.apodo && <p className="text-xs font-bold text-emerald-400 mt-0.5">"{player.apodo}"</p>}
                 <p className="text-[10px] font-bold text-blue-400 uppercase tracking-wider">{player.posicion}</p>
               </div>
             </div>
@@ -2193,6 +2201,7 @@ export default function Plantilla() {
   const [formData, setFormData] = useState({
     nombre: '',
     apellidos: '',
+    apodo: '',
     dorsal: '',
     posicion: 'DELANTERO',
     foto_url: '',
@@ -2202,6 +2211,62 @@ export default function Plantilla() {
     email: '',
     estado_fisico: 'Disponible' as 'Disponible' | 'Lesionado' | 'Duda'
   });
+
+  // Edit Roster Player Modal State
+  const [editingRosterPlayer, setEditingRosterPlayer] = useState<TeamPlayer | null>(null);
+  const [editRosterFormData, setEditRosterFormData] = useState<Partial<TeamPlayer>>({});
+
+  const handleStartEditRosterPlayer = (player: TeamPlayer) => {
+    setEditingRosterPlayer(player);
+    setEditRosterFormData({
+      nombre: player.nombre,
+      apellidos: player.apellidos,
+      apodo: player.apodo || '',
+      dorsal: player.dorsal || '',
+      posicion: player.posicion,
+      foto_url: player.foto_url || '',
+      anio_nacimiento: player.anio_nacimiento,
+      lateralidad: player.lateralidad || 'Derecho',
+      telefono: player.telefono || '',
+      email: player.email || '',
+      estado_fisico: player.estado_fisico || 'Disponible'
+    });
+  };
+
+  const handleSaveRosterPlayerEdit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingRosterPlayer) return;
+
+    if (!editRosterFormData.nombre?.trim() || !editRosterFormData.apellidos?.trim()) {
+      toast.error('Nombre y Apellidos son obligatorios');
+      return;
+    }
+
+    const updatedPlayer: TeamPlayer = {
+      ...editingRosterPlayer,
+      nombre: editRosterFormData.nombre.trim(),
+      apellidos: editRosterFormData.apellidos.trim(),
+      apodo: editRosterFormData.apodo?.trim() || undefined,
+      dorsal: editRosterFormData.dorsal?.trim() || editingRosterPlayer.dorsal,
+      posicion: editRosterFormData.posicion || editingRosterPlayer.posicion,
+      foto_url: editRosterFormData.foto_url?.trim() || undefined,
+      anio_nacimiento: editRosterFormData.anio_nacimiento,
+      lateralidad: editRosterFormData.lateralidad || 'Derecho',
+      telefono: editRosterFormData.telefono?.trim() || undefined,
+      email: editRosterFormData.email?.trim() || undefined,
+      estado_fisico: editRosterFormData.estado_fisico || 'Disponible'
+    };
+
+    const updatedList = players.map(p => p.id === updatedPlayer.id ? updatedPlayer : p);
+    saveRoster(updatedList);
+
+    if (selectedPlayerProfile && selectedPlayerProfile.id === updatedPlayer.id) {
+      setSelectedPlayerProfile(updatedPlayer);
+    }
+
+    toast.success(`Datos de ${updatedPlayer.nombre} ${updatedPlayer.apellidos} actualizados correctamente.`);
+    setEditingRosterPlayer(null);
+  };
 
   // Load team roster from localStorage on team change
   useEffect(() => {
@@ -2850,6 +2915,7 @@ export default function Plantilla() {
     setFormData({
       nombre: '',
       apellidos: '',
+      apodo: '',
       dorsal: '',
       posicion: 'DELANTERO',
       foto_url: '',
@@ -3034,6 +3100,17 @@ export default function Plantilla() {
                 </div>
 
                 <div>
+                  <label className="text-xs font-semibold text-slate-400">Apodo / Nombre Deportivo</label>
+                  <input 
+                    type="text" 
+                    value={formData.apodo || ''}
+                    onChange={(e) => setFormData({...formData, apodo: e.target.value})}
+                    className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-emerald-400 font-semibold focus:outline-none focus:border-blue-500 transition-all mt-1"
+                    placeholder="Ej. 'Pedri'"
+                  />
+                </div>
+
+                <div>
                   <label className="text-xs font-semibold text-slate-400">Dorsal</label>
                   <input 
                     type="text" 
@@ -3202,7 +3279,10 @@ export default function Plantilla() {
                     </div>
 
                     <div className="flex-1 min-w-0">
-                      <h5 className="font-bold text-white text-sm truncate uppercase tracking-tight group-hover:text-blue-400 transition-colors">{player.nombre} {player.apellidos}</h5>
+                      <h5 className="font-bold text-white text-sm truncate uppercase tracking-tight group-hover:text-blue-400 transition-colors">
+                        {player.nombre} {player.apellidos}
+                        {player.apodo && <span className="text-emerald-400 font-normal text-xs normal-case ml-1.5 font-semibold">"{player.apodo}"</span>}
+                      </h5>
                       <p className="text-[10px] text-blue-400 font-bold uppercase tracking-wider mt-0.5">{player.posicion}</p>
                       
                       <div className="flex flex-wrap gap-2 mt-2">
@@ -3230,7 +3310,19 @@ export default function Plantilla() {
                     </div>
 
                     <div className="flex items-center gap-1">
-                      <span className="text-[9px] text-blue-400 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity mr-2">Ver Ficha →</span>
+                      <span className="text-[9px] text-blue-400 font-bold uppercase opacity-0 group-hover:opacity-100 transition-opacity mr-1">Ver Ficha →</span>
+                      <Button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleStartEditRosterPlayer(player);
+                        }}
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg cursor-pointer"
+                        title="Editar datos personales"
+                      >
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
                       <Button
                         onClick={(e) => {
                           e.stopPropagation();
@@ -3364,9 +3456,14 @@ export default function Plantilla() {
                   </span>
                 </div>
 
-                <div className="text-center sm:text-left space-y-1">
-                  <h4 className="text-xl font-black text-white uppercase tracking-tight">
-                    {selectedPlayerProfile.nombre} {selectedPlayerProfile.apellidos}
+                <div className="text-center sm:text-left space-y-1 flex-1">
+                  <h4 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2 flex-wrap justify-center sm:justify-start">
+                    <span>{selectedPlayerProfile.nombre} {selectedPlayerProfile.apellidos}</span>
+                    {selectedPlayerProfile.apodo && (
+                      <span className="text-emerald-400 font-bold text-xs normal-case bg-emerald-950/60 border border-emerald-500/30 px-2 py-0.5 rounded-md">
+                        "{selectedPlayerProfile.apodo}"
+                      </span>
+                    )}
                   </h4>
                   <p className="text-xs text-blue-400 font-bold uppercase tracking-wider">
                     {selectedPlayerProfile.posicion} • Dorsal {selectedPlayerProfile.dorsal}
@@ -3378,6 +3475,16 @@ export default function Plantilla() {
                     }`} />
                     <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">{selectedPlayerProfile.estado_fisico}</span>
                   </div>
+                </div>
+
+                <div className="shrink-0">
+                  <Button 
+                    size="sm"
+                    onClick={() => handleStartEditRosterPlayer(selectedPlayerProfile)}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md"
+                  >
+                    <Pencil className="w-3.5 h-3.5 mr-1.5" /> Editar Datos Personales
+                  </Button>
                 </div>
               </div>
 
@@ -4702,6 +4809,186 @@ export default function Plantilla() {
 
         </div>,
         document.body
+      )}
+
+      {/* EDIT ROSTER PLAYER MODAL */}
+      {editingRosterPlayer && (
+        <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto print:hidden">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-xl overflow-hidden shadow-2xl animate-in fade-in duration-200">
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950">
+              <div className="flex items-center gap-2.5">
+                <div className="p-2 bg-blue-600/20 text-blue-400 rounded-xl border border-blue-500/30">
+                  <Pencil className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-white text-base leading-tight">Editar Datos Personales</h3>
+                  <p className="text-xs text-slate-400">Jugador/a: {editingRosterPlayer.nombre} {editingRosterPlayer.apellidos}</p>
+                </div>
+              </div>
+              <button 
+                type="button" 
+                onClick={() => setEditingRosterPlayer(null)}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-slate-800 transition-colors"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveRosterPlayerEdit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Nombre *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editRosterFormData.nombre || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, nombre: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Apellidos *</label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editRosterFormData.apellidos || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, apellidos: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-emerald-400 block mb-1">Apodo / Alias</label>
+                  <input 
+                    type="text" 
+                    value={editRosterFormData.apodo || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, apodo: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-emerald-400 font-semibold focus:outline-none focus:border-emerald-500 transition-colors"
+                    placeholder="Ej. 'Pedri'"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Dorsal</label>
+                  <input 
+                    type="text" 
+                    value={editRosterFormData.dorsal || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, dorsal: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="10"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Posición</label>
+                  <select 
+                    value={editRosterFormData.posicion || 'DELANTERO'}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, posicion: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="PORTERO">PORTERO</option>
+                    <option value="LATERAL DERECHO">LATERAL DERECHO</option>
+                    <option value="LATERAL IZQUIERDO">LATERAL IZQUIERDO</option>
+                    <option value="CENTRAL">CENTRAL</option>
+                    <option value="PIVOTE">PIVOTE</option>
+                    <option value="INTERIOR">INTERIOR</option>
+                    <option value="MEDIA PUNTA">MEDIA PUNTA</option>
+                    <option value="EXTREMO DERECHO">EXTREMO DERECHO</option>
+                    <option value="EXTREMO IZQUIERDO">EXTREMO IZQUIERDO</option>
+                    <option value="DELANTERO">DELANTERO</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Año Nacimiento</label>
+                  <input 
+                    type="number" 
+                    value={editRosterFormData.anio_nacimiento || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, anio_nacimiento: parseInt(e.target.value) || undefined })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Lateralidad</label>
+                  <select 
+                    value={editRosterFormData.lateralidad || 'Derecho'}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, lateralidad: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="Derecho">Derecho</option>
+                    <option value="Izquierdo">Izquierdo</option>
+                    <option value="Ambidiestro">Ambidiestro</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Estado Físico</label>
+                  <select 
+                    value={editRosterFormData.estado_fisico || 'Disponible'}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, estado_fisico: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  >
+                    <option value="Disponible">Disponible</option>
+                    <option value="Lesionado">Lesionado</option>
+                    <option value="Duda">Duda</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Teléfono</label>
+                  <input 
+                    type="text" 
+                    value={editRosterFormData.telefono || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, telefono: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="600000000"
+                  />
+                </div>
+                <div>
+                  <label className="text-xs font-semibold text-slate-300 block mb-1">Email</label>
+                  <input 
+                    type="email" 
+                    value={editRosterFormData.email || ''}
+                    onChange={(e) => setEditRosterFormData({ ...editRosterFormData, email: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                    placeholder="correo@ejemplo.com"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-semibold text-slate-300 block mb-1">URL Foto de Perfil</label>
+                <input 
+                  type="url" 
+                  value={editRosterFormData.foto_url || ''}
+                  onChange={(e) => setEditRosterFormData({ ...editRosterFormData, foto_url: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-colors"
+                  placeholder="https://..."
+                />
+              </div>
+
+              <div className="pt-4 border-t border-slate-800 flex justify-end gap-3">
+                <Button 
+                  type="button" 
+                  variant="outline"
+                  onClick={() => setEditingRosterPlayer(null)}
+                  className="border-slate-700 text-slate-300 hover:text-white"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold"
+                >
+                  <Save className="w-4 h-4 mr-2" /> Guardar Cambios
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
 
       {/* Printable Style Block */}

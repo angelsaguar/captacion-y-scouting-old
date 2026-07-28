@@ -101,7 +101,7 @@ export default function Players() {
       let query = supabase.from('players').select('*, attributes:player_attributes(*)');
 
       if (search) {
-        query = query.ilike('nombre', `%${search}%`);
+        query = query.or(`nombre.ilike.%${search}%,apellidos.ilike.%${search}%,apodo.ilike.%${search}%`);
       }
       if (filterStatus) {
         query = query.eq('estado', filterStatus);
@@ -434,8 +434,13 @@ export default function Players() {
                 </div>
                 <div className="absolute inset-0 bg-gradient-to-t from-slate-950 via-slate-950/20 to-transparent" />
                 <div className="absolute bottom-4 left-5 right-5">
-                  <p className="text-white font-bold text-xl leading-tight truncate tracking-tight">
-                    {player.nombre} {player.apellidos}
+                  <p className="text-white font-bold text-xl leading-tight truncate tracking-tight flex items-center gap-1.5">
+                    <span>{player.nombre} {player.apellidos}</span>
+                    {player.apodo && (
+                      <span className="text-emerald-400 font-semibold text-xs shrink-0">
+                        "{player.apodo}"
+                      </span>
+                    )}
                   </p>
                   <p className="text-blue-500 text-[10px] uppercase tracking-[0.2em] font-black mt-0.5">
                     {player.posicion} {player.equipo_asignado ? `• ${player.equipo_asignado}` : ''}
@@ -495,11 +500,9 @@ export default function Players() {
                       <DropdownMenuItem onClick={() => navigate(`/players/${player.id}`)}>
                         <Eye className="w-4 h-4 mr-2" /> Ver detalle
                       </DropdownMenuItem>
-                      {(isAdmin || user?.role === 'scout') && (
-                        <DropdownMenuItem onClick={() => navigate(`/players/${player.id}/edit`)}>
-                          <Edit2 className="w-4 h-4 mr-2" /> Editar
-                        </DropdownMenuItem>
-                      )}
+                      <DropdownMenuItem onClick={() => navigate(`/players/${player.id}/edit`)}>
+                        <Edit2 className="w-4 h-4 mr-2" /> Editar datos personales
+                      </DropdownMenuItem>
                       {isAdmin && (
                         <DropdownMenuItem 
                           className="text-red-600 focus:text-red-600 cursor-pointer"
@@ -545,7 +548,14 @@ export default function Players() {
                     </div>
                   </TableCell>
                   <TableCell className="font-bold text-white tracking-tight">
-                    {player.nombre} {player.apellidos}
+                    <div>
+                      {player.nombre} {player.apellidos}
+                      {player.apodo && (
+                        <span className="block text-xs font-semibold text-emerald-400">
+                          "{player.apodo}"
+                        </span>
+                      )}
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Badge variant="outline" className="font-bold text-[10px] uppercase border-slate-700 text-slate-400">{player.posicion}</Badge>

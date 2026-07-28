@@ -51,6 +51,7 @@ import { getObservers, addObserver } from '@/lib/observers';
   const playerSchema = z.object({
   nombre: z.string().min(2, 'Nombre requerido'),
   apellidos: z.string().min(2, 'Apellidos requeridos'),
+  apodo: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
   email: z.string().email('Correo electrónico no válido').or(z.literal('')).nullable().optional(),
   contacto_tipo: z.enum(['Padre', 'Madre', 'Jugador']),
@@ -103,6 +104,7 @@ export default function PlayerForm() {
     defaultValues: {
       nombre: '',
       apellidos: '',
+      apodo: '',
       posicion: 'CENTRAL',
       potencial: 3,
       estado: 'Observado',
@@ -152,6 +154,7 @@ export default function PlayerForm() {
             form.reset({
               nombre: player.nombre,
               apellidos: player.apellidos,
+              apodo: player.apodo || '',
               telefono: player.telefono || '',
               email: player.email || '',
               contacto_tipo: player.contacto_tipo as any,
@@ -299,6 +302,7 @@ export default function PlayerForm() {
 
       const playerPayload = {
         ...values,
+        apodo: values.apodo || null,
         foto_url: finalFotoUrl || null,
         fecha_seguimiento: values.fecha_seguimiento || null,
         telefono: values.telefono || null,
@@ -421,16 +425,20 @@ export default function PlayerForm() {
               <CardTitle>Información Básica</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="nombre">Nombre</Label>
+                  <Label htmlFor="nombre">Nombre *</Label>
                   <Input id="nombre" {...form.register('nombre')} placeholder="Ej: Juan" className="bg-slate-800/40 border-slate-700" />
                   {form.formState.errors.nombre && <p className="text-xs text-red-500">{form.formState.errors.nombre.message}</p>}
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="apellidos">Apellidos</Label>
+                  <Label htmlFor="apellidos">Apellidos *</Label>
                   <Input id="apellidos" {...form.register('apellidos')} placeholder="Ej: García Pérez" className="bg-slate-800/40 border-slate-700" />
                   {form.formState.errors.apellidos && <p className="text-xs text-red-500">{form.formState.errors.apellidos.message}</p>}
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="apodo">Apodo / Nombre Deportivo</Label>
+                  <Input id="apodo" {...form.register('apodo')} placeholder="Ej: 'Pedri', 'Gavi'" className="bg-slate-800/40 border-slate-700 text-emerald-400 font-semibold" />
                 </div>
               </div>
 

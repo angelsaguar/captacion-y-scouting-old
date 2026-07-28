@@ -16,6 +16,7 @@ export interface Player {
   id: string;
   nombre: string;
   apellidos: string;
+  apodo?: string;
   telefono?: string;
   email?: string; // New field for player/family email
   contacto_tipo?: ContactType;
