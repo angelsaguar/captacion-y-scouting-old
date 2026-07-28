@@ -33,7 +33,8 @@ import {
   Share2,
   FileDown,
   Image as ImageIcon,
-  Printer
+  Printer,
+  Pencil
 } from 'lucide-react';
 import html2canvas from 'html2canvas';
 import { toPng } from 'html-to-image';
@@ -111,6 +112,7 @@ export default function Partidos() {
   const [players, setPlayers] = useState<any[]>([]);
   const [showAddForm, setShowAddForm] = useState(false);
   const [showActaModal, setShowActaModal] = useState<Match | null>(null);
+  const [editingMatch, setEditingMatch] = useState<Match | null>(null);
   
   // Interactive statistics editor inside closure modal
   const [matchPlayerStats, setMatchPlayerStats] = useState<MatchPlayerStat[]>([]);
@@ -728,6 +730,48 @@ ${citObs || '• Acudir con puntualidad.\n• Confirmar asistencia en el grupo.'
     setShowActaModal(null);
   };
 
+  const handleOpenEditModal = (match: Match) => {
+    setEditingMatch({
+      ...match,
+      lugar: match.lugar || match.estadisticas?.lugar || '',
+      hora_citacion: match.hora_citacion || match.estadisticas?.hora_citacion || '',
+      equipacion: match.equipacion || match.estadisticas?.equipacion || '',
+      observaciones: match.observaciones || match.estadisticas?.observaciones || ''
+    });
+  };
+
+  const handleSaveEditMatch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingMatch) return;
+
+    if (!editingMatch.rival.trim()) {
+      toast.error('El nombre del equipo rival es obligatorio');
+      return;
+    }
+
+    const updatedStats = {
+      ...(editingMatch.estadisticas || {}),
+      lugar: editingMatch.lugar || '',
+      hora_citacion: editingMatch.hora_citacion || '',
+      equipacion: editingMatch.equipacion || '',
+      observaciones: editingMatch.observaciones || ''
+    };
+
+    const updatedMatch: Match = {
+      ...editingMatch,
+      goles_favor: editingMatch.estado === 'Finalizado' ? (editingMatch.goles_favor ?? 0) : undefined,
+      goles_contra: editingMatch.estado === 'Finalizado' ? (editingMatch.goles_contra ?? 0) : undefined,
+      acta: editingMatch.estado === 'Finalizado' ? (editingMatch.acta ?? '') : undefined,
+      estadisticas: updatedStats
+    };
+
+    const updated = matches.map(m => m.id === editingMatch.id ? updatedMatch : m);
+
+    await saveMatches(updated);
+    toast.success(`¡Partido contra ${editingMatch.rival} modificado y guardado correctamente!`);
+    setEditingMatch(null);
+  };
+
   return (
     <div className="space-y-6">
       {/* Selector & Add */}
@@ -1011,16 +1055,38 @@ ${citObs || '• Acudir con puntualidad.\n• Confirmar asistencia en el grupo.'
                         <span>Cerrar Partido</span>
                       </Button>
                     )}
+
+                    <Button
+                      onClick={() => handleOpenEditModal(match)}
+                      variant="ghost"
+                      className="text-[10px] font-black text-blue-400 hover:text-white flex items-center gap-1 px-2.5 h-8 bg-blue-500/10 hover:bg-blue-600 rounded-xl uppercase cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                      <span>Editar</span>
+                    </Button>
                   </div>
 
-                  <Button
-                    onClick={() => handleDeleteMatch(match.id, match.rival)}
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg cursor-pointer"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  <div className="flex items-center gap-1">
+                    <Button
+                      onClick={() => handleOpenEditModal(match)}
+                      variant="ghost"
+                      size="icon"
+                      title="Editar partido"
+                      className="h-8 w-8 text-slate-400 hover:text-blue-400 hover:bg-blue-500/10 rounded-lg cursor-pointer"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+
+                    <Button
+                      onClick={() => handleDeleteMatch(match.id, match.rival)}
+                      variant="ghost"
+                      size="icon"
+                      title="Eliminar partido"
+                      className="h-8 w-8 text-slate-500 hover:text-red-400 hover:bg-red-500/10 rounded-lg cursor-pointer"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </div>
             ))
@@ -2068,6 +2134,238 @@ ${citObs || '• Acudir con puntualidad.\n• Confirmar asistencia en el grupo.'
     </div>
   );
 })()}
+
+      {/* Edit Match Modal */}
+      {editingMatch && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm overflow-y-auto">
+          <form onSubmit={handleSaveEditMatch} className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-2xl my-8 overflow-hidden shadow-2xl animate-in fade-in duration-200">
+            {/* Modal Header */}
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-blue-400" />
+                <h3 className="font-extrabold text-white text-base uppercase tracking-tight">
+                  Modificar / Editar Partido
+                </h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingMatch(null)}
+                className="text-slate-400 hover:text-white cursor-pointer text-lg font-bold"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 space-y-5">
+              <div className="bg-blue-950/30 border border-blue-800/40 rounded-2xl p-3.5 text-xs text-blue-300 flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-blue-400 shrink-0" />
+                <span>Modifica los datos del encuentro. Se sincronizarán en Supabase y en el calendario de partidos.</span>
+              </div>
+
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Equipo Rival *
+                  </label>
+                  <input 
+                    type="text" 
+                    required
+                    value={editingMatch.rival}
+                    onChange={(e) => setEditingMatch({ ...editingMatch, rival: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold"
+                    placeholder="Ej. A.D. Arganda"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Fecha del Partido *
+                  </label>
+                  <input 
+                    type="date" 
+                    required
+                    value={editingMatch.fecha}
+                    onChange={(e) => setEditingMatch({ ...editingMatch, fecha: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Hora del Partido *
+                  </label>
+                  <input 
+                    type="time" 
+                    required
+                    value={editingMatch.hora}
+                    onChange={(e) => setEditingMatch({ ...editingMatch, hora: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Localía
+                  </label>
+                  <select 
+                    value={editingMatch.tipo}
+                    onChange={(e) => setEditingMatch({ ...editingMatch, tipo: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold cursor-pointer"
+                  >
+                    <option value="Local">Local (UD La Poveda)</option>
+                    <option value="Visitante">Visitante (Fuera)</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Competición
+                  </label>
+                  <select 
+                    value={editingMatch.competicion}
+                    onChange={(e) => setEditingMatch({ ...editingMatch, competicion: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold cursor-pointer"
+                  >
+                    <option value="Liga">Liga</option>
+                    <option value="Copa">Copa</option>
+                    <option value="Amistoso">Amistoso</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Estado del Partido
+                  </label>
+                  <select 
+                    value={editingMatch.estado}
+                    onChange={(e) => setEditingMatch({ ...editingMatch, estado: e.target.value as any })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold cursor-pointer"
+                  >
+                    <option value="Programado">Programado</option>
+                    <option value="Finalizado">Finalizado / Jugado</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Logística & Citación extra fields */}
+              <div className="space-y-4 pt-2 border-t border-slate-800">
+                <h4 className="text-xs font-extrabold uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                  <MapPin className="w-3.5 h-3.5 text-red-400" />
+                  <span>Ubicación y Datos de Citación</span>
+                </h4>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400">Lugar / Campo de Juego</label>
+                    <input 
+                      type="text" 
+                      value={editingMatch.lugar || ''}
+                      onChange={(e) => setEditingMatch({ ...editingMatch, lugar: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                      placeholder="Ej. Polideportivo Municipal La Poveda"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-semibold text-slate-400">Hora de Citación</label>
+                    <input 
+                      type="text" 
+                      value={editingMatch.hora_citacion || ''}
+                      onChange={(e) => setEditingMatch({ ...editingMatch, hora_citacion: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                      placeholder="Ej. 11:00 h (1h 15m antes)"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-slate-400">Indumentaria / Equipación</label>
+                    <input 
+                      type="text" 
+                      value={editingMatch.equipacion || ''}
+                      onChange={(e) => setEditingMatch({ ...editingMatch, equipacion: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                      placeholder="Ej. 1ª Equipación Oficial (Camiseta Azul) + Chándal"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="text-[11px] font-semibold text-slate-400">Observaciones y Notas Tácticas</label>
+                    <textarea 
+                      value={editingMatch.observaciones || ''}
+                      onChange={(e) => setEditingMatch({ ...editingMatch, observaciones: e.target.value })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1 h-16"
+                      placeholder="Instrucciones para las jugadoras, recomendación de llegada, etc."
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {editingMatch.estado === 'Finalizado' && (
+                <div className="space-y-4 pt-2 border-t border-slate-800">
+                  <h4 className="text-xs font-extrabold uppercase text-slate-300 tracking-wider flex items-center gap-1.5">
+                    <ClipboardList className="w-3.5 h-3.5 text-emerald-400" />
+                    <span>Resultado y Marcador</span>
+                  </h4>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-400">Goles a Favor</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={editingMatch.goles_favor ?? 0}
+                        onChange={(e) => setEditingMatch({ ...editingMatch, goles_favor: parseInt(e.target.value) || 0 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-[11px] font-semibold text-slate-400">Goles en Contra</label>
+                      <input 
+                        type="number" 
+                        min="0"
+                        value={editingMatch.goles_contra ?? 0}
+                        onChange={(e) => setEditingMatch({ ...editingMatch, goles_contra: parseInt(e.target.value) || 0 })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2">
+                      <label className="text-[11px] font-semibold text-slate-400">Resumen del Acta / Comentarios</label>
+                      <textarea 
+                        value={editingMatch.acta || ''}
+                        onChange={(e) => setEditingMatch({ ...editingMatch, acta: e.target.value })}
+                        className="w-full bg-slate-950 border border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1 h-16"
+                        placeholder="Resumen del partido..."
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-6 border-t border-slate-800 bg-slate-950/60 flex items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setEditingMatch(null)}
+                className="text-xs font-bold border-slate-800 text-slate-300 hover:bg-slate-800 rounded-xl cursor-pointer"
+              >
+                Cancelar
+              </Button>
+              <Button
+                type="submit"
+                className="text-xs font-black uppercase bg-blue-600 hover:bg-blue-500 text-white rounded-xl gap-2 cursor-pointer shadow-lg shadow-blue-600/20 px-5 h-10"
+              >
+                <Save className="w-4 h-4" />
+                <span>Guardar Cambios</span>
+              </Button>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
   );
 }
