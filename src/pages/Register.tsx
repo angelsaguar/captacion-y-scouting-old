@@ -44,10 +44,11 @@ export default function Register() {
       const cleanEmail = email.trim().toLowerCase();
       const cleanNombre = nombre.trim().toLowerCase();
       const isSanti = cleanEmail.includes('santi') || cleanNombre.includes('santi');
+      const isAlejandro = cleanEmail.includes('alejandro') || cleanNombre.includes('alejandro') || cleanEmail.includes('saguar') || cleanNombre.includes('saguar');
       const isAdmin = cleanEmail === 'angel.saguar@telefonica.net';
 
-      if (!isAdmin && !isSanti) {
-        throw new Error('Acceso restringido: Solo se permite el registro al administrador Ángel Saguar y al observador SANTI.');
+      if (!isAdmin && !isSanti && !isAlejandro) {
+        throw new Error('Acceso restringido: Solo se permite el registro al administrador Ángel Saguar y a los observadores SANTI y ALEJANDRO SAGUAR.');
       }
 
       // 1. Sign up user

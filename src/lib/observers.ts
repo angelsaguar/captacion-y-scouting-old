@@ -7,7 +7,8 @@ const LOCAL_STORAGE_KEY = 'ud_lapoveda_observers_backup';
 // Default built-in observers to ensure the list is never completely empty
 const DEFAULT_OBSERVERS: Observer[] = [
   { id: 'def-1', nombre: 'Ángel Saguar', created_at: new Date().toISOString() },
-  { id: 'def-2', nombre: 'Scout UD La Poveda', created_at: new Date().toISOString() }
+  { id: 'def-2', nombre: 'Alejandro Saguar', created_at: new Date().toISOString() },
+  { id: 'def-3', nombre: 'Scout UD La Poveda', created_at: new Date().toISOString() }
 ];
 
 export async function getObservers(): Promise<Observer[]> {
@@ -16,8 +17,14 @@ export async function getObservers(): Promise<Observer[]> {
   if (cached) {
     try {
       localList = JSON.parse(cached);
+      // Ensure default observers are in local list
+      for (const defObs of DEFAULT_OBSERVERS) {
+        if (!localList.some(o => o.nombre.toLowerCase() === defObs.nombre.toLowerCase())) {
+          localList.push(defObs);
+        }
+      }
     } catch {
-      localList = [];
+      localList = [...DEFAULT_OBSERVERS];
     }
   } else {
     // Initialize cache on first use

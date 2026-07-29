@@ -18,10 +18,11 @@ export const useAuthStore = create<AuthState>((set) => ({
       const cleanEmail = user.email ? user.email.toLowerCase() : '';
       const cleanNombre = user.nombre ? user.nombre.toLowerCase() : '';
       const isSanti = cleanEmail.includes('santi') || cleanNombre.includes('santi');
+      const isAlejandro = cleanEmail.includes('alejandro') || cleanNombre.includes('alejandro') || cleanEmail.includes('saguar') || cleanNombre.includes('saguar');
       const isAdmin = cleanEmail === 'angel.saguar@telefonica.net';
       const isScout = user.role === 'scout';
 
-      if (!isAdmin && !isSanti && !isScout) {
+      if (!isAdmin && !isSanti && !isAlejandro && !isScout) {
         supabase.auth.signOut();
         set({ user: null, loading: false });
         return;
@@ -43,7 +44,9 @@ export const useAuthStore = create<AuthState>((set) => ({
       const { data: { user: authUser } } = await supabase.auth.getUser();
       if (authUser) {
         const cleanEmail = authUser.email ? authUser.email.toLowerCase() : '';
-        const isSanti = cleanEmail.includes('santi') || (authUser.user_metadata?.nombre || '').toLowerCase().includes('santi');
+        const cleanNombre = (authUser.user_metadata?.nombre || '').toLowerCase();
+        const isSanti = cleanEmail.includes('santi') || cleanNombre.includes('santi');
+        const isAlejandro = cleanEmail.includes('alejandro') || cleanNombre.includes('alejandro') || cleanEmail.includes('saguar') || cleanNombre.includes('saguar');
         const isAdminEmail = cleanEmail === 'angel.saguar@telefonica.net';
         
         // Fetch profile to see if they exist in users table
@@ -55,7 +58,7 @@ export const useAuthStore = create<AuthState>((set) => ({
         
         const hasValidProfile = profile && (profile.role === 'scout' || profile.role === 'admin');
 
-        if (!isAdminEmail && !isSanti && !hasValidProfile) {
+        if (!isAdminEmail && !isSanti && !isAlejandro && !hasValidProfile) {
           await supabase.auth.signOut();
           set({ user: null, loading: false });
           return;

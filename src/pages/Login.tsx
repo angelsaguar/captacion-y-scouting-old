@@ -33,10 +33,11 @@ export default function Login() {
 
     const cleanEmail = email.trim().toLowerCase();
     const isSanti = cleanEmail.includes('santi');
+    const isAlejandro = cleanEmail.includes('alejandro') || cleanEmail.includes('saguar');
     const isAdmin = cleanEmail === 'angel.saguar@telefonica.net';
 
-    if (!isAdmin && !isSanti) {
-      toast.error('Acceso restringido: Solo el administrador Ángel Saguar y el observador SANTI tienen permitido el acceso a la plataforma.');
+    if (!isAdmin && !isSanti && !isAlejandro) {
+      toast.error('Acceso restringido: Solo el administrador Ángel Saguar y los observadores autorizados (SANTI, ALEJANDRO SAGUAR) tienen permitido el acceso.');
       return;
     }
 
@@ -54,9 +55,10 @@ export default function Login() {
         const loggedEmail = data.user.email ? data.user.email.toLowerCase() : '';
         const loggedNombre = (data.user.user_metadata?.nombre || '').toLowerCase();
         const loggedIsSanti = loggedEmail.includes('santi') || loggedNombre.includes('santi');
+        const loggedIsAlejandro = loggedEmail.includes('alejandro') || loggedEmail.includes('saguar') || loggedNombre.includes('alejandro') || loggedNombre.includes('saguar');
         const loggedIsAdmin = loggedEmail === 'angel.saguar@telefonica.net';
 
-        if (!loggedIsAdmin && !loggedIsSanti) {
+        if (!loggedIsAdmin && !loggedIsSanti && !loggedIsAlejandro) {
           await supabase.auth.signOut();
           throw new Error('Acceso restringido: Cuenta no autorizada.');
         }
@@ -93,7 +95,7 @@ export default function Login() {
           </div>
           <CardTitle className="text-2xl font-bold tracking-tight text-white uppercase">U.D. LA POVEDA SCOUTING</CardTitle>
           <CardDescription className="text-slate-400 font-medium">
-            Acceso autorizado para el administrador Ángel Saguar y el observador SANTI.
+            Acceso autorizado para el administrador Ángel Saguar y los observadores (SANTI, ALEJANDRO SAGUAR).
           </CardDescription>
         </CardHeader>
         <form onSubmit={handleLogin}>
@@ -146,7 +148,7 @@ export default function Login() {
               )}
             </Button>
             <p className="text-xs text-center text-slate-400 font-medium mt-1">
-              ¿Eres el observador SANTI? <Link to="/register" className="text-blue-500 hover:underline font-bold">Regístrate aquí</Link>
+              ¿Eres observador autorizado (SANTI / ALEJANDRO SAGUAR)? <Link to="/register" className="text-blue-500 hover:underline font-bold">Regístrate aquí</Link>
             </p>
           </CardFooter>
         </form>
