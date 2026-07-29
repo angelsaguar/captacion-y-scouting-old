@@ -138,28 +138,6 @@ export default function Players() {
       if (error) throw error;
       let rawList: Player[] = data || [];
 
-      // 0. Cleanup/un-pollute official female players from deleted lists if mistakenly added by male player deletions
-      const femaleNormKeys = JUGADORAS_ADJUNTAS.map(j => normalizePlayerNameKey(j.nombre, j.apellidos));
-      const femaleIds = JUGADORAS_ADJUNTAS.map(j => j.id);
-
-      const femDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
-      if (femDelSaved) {
-        try {
-          const femDelList: { id?: string; fullName: string }[] = JSON.parse(femDelSaved);
-          const cleanedFem = femDelList.filter(item => !femaleNormKeys.includes(item.fullName) && !(item.id && femaleIds.includes(item.id)));
-          localStorage.setItem('team_deleted_players_SENIOR FEMENINO', JSON.stringify(cleanedFem));
-        } catch {}
-      }
-
-      const scoutDelSaved = localStorage.getItem('scouting_deleted_players');
-      if (scoutDelSaved) {
-        try {
-          const scoutList: string[] = JSON.parse(scoutDelSaved);
-          const cleanedScout = scoutList.filter(item => !femaleNormKeys.includes(item) && !femaleIds.includes(item));
-          localStorage.setItem('scouting_deleted_players', JSON.stringify(cleanedScout));
-        } catch {}
-      }
-
       // Deleted players lists
       const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
       const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];

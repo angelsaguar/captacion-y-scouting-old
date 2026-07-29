@@ -2310,28 +2310,6 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
 
   // Load team roster from localStorage on team change
   useEffect(() => {
-    // 0. Cleanup/un-pollute any official female player keys mistakenly added to deleted lists by male player deletions
-    const femaleNormKeys = JUGADORAS_ADJUNTAS.map(j => normalizePlayerNameKey(j.nombre, j.apellidos));
-    const femaleIds = JUGADORAS_ADJUNTAS.map(j => j.id);
-
-    const femDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
-    if (femDelSaved) {
-      try {
-        const femDelList: { id?: string; fullName: string }[] = JSON.parse(femDelSaved);
-        const cleanedFem = femDelList.filter(item => !femaleNormKeys.includes(item.fullName) && !(item.id && femaleIds.includes(item.id)));
-        localStorage.setItem('team_deleted_players_SENIOR FEMENINO', JSON.stringify(cleanedFem));
-      } catch {}
-    }
-
-    const scoutDelSaved = localStorage.getItem('scouting_deleted_players');
-    if (scoutDelSaved) {
-      try {
-        const scoutList: string[] = JSON.parse(scoutDelSaved);
-        const cleanedScout = scoutList.filter(item => !femaleNormKeys.includes(item) && !femaleIds.includes(item));
-        localStorage.setItem('scouting_deleted_players', JSON.stringify(cleanedScout));
-      } catch {}
-    }
-
     const key = `team_roster_${selectedTeam}`;
     const saved = localStorage.getItem(key);
 
@@ -2741,6 +2719,20 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
 
       if (playerChanges) {
         saveRoster(updatedPlayers);
+      }
+
+      // Purge deleted players from Supabase for this team
+      const deletedKey = `team_deleted_players_${selectedTeam}`;
+      const deletedSaved = localStorage.getItem(deletedKey);
+      if (deletedSaved) {
+        try {
+          const deletedPlayersArr: { id?: string; fullName: string }[] = JSON.parse(deletedSaved);
+          for (const dp of deletedPlayersArr) {
+            if (dp.id) {
+              await supabase.from('players').delete().eq('id', dp.id);
+            }
+          }
+        } catch {}
       }
 
       // 2. Sync Matches
