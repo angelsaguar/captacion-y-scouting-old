@@ -138,22 +138,51 @@ export default function Players() {
       if (error) throw error;
       let rawList: Player[] = data || [];
 
+      // 0. Cleanup/un-pollute official female players from deleted lists if mistakenly added by male player deletions
+      const femaleNormKeys = JUGADORAS_ADJUNTAS.map(j => normalizePlayerNameKey(j.nombre, j.apellidos));
+      const femaleIds = JUGADORAS_ADJUNTAS.map(j => j.id);
+
+      const femDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
+      if (femDelSaved) {
+        try {
+          const femDelList: { id?: string; fullName: string }[] = JSON.parse(femDelSaved);
+          const cleanedFem = femDelList.filter(item => !femaleNormKeys.includes(item.fullName) && !(item.id && femaleIds.includes(item.id)));
+          localStorage.setItem('team_deleted_players_SENIOR FEMENINO', JSON.stringify(cleanedFem));
+        } catch {}
+      }
+
+      const scoutDelSaved = localStorage.getItem('scouting_deleted_players');
+      if (scoutDelSaved) {
+        try {
+          const scoutList: string[] = JSON.parse(scoutDelSaved);
+          const cleanedScout = scoutList.filter(item => !femaleNormKeys.includes(item) && !femaleIds.includes(item));
+          localStorage.setItem('scouting_deleted_players', JSON.stringify(cleanedScout));
+        } catch {}
+      }
+
       // Deleted players lists
       const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
       const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
 
-      const teamDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
-      const teamDelList: { id?: string; fullName: string }[] = teamDelSaved ? JSON.parse(teamDelSaved) : [];
-
-      const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
+      const isDeletedPlayer = (id: string, nombre: string, apellidos: string, equipoAsignado?: string) => {
         const normKey = normalizePlayerNameKey(nombre, apellidos);
         const simpleName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
-        if (scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleName)) return true;
-        return teamDelList.some(dp => (dp.id && dp.id === id) || dp.fullName === normKey || dp.fullName === simpleName);
+        if (scoutingDelList.includes(id)) return true;
+
+        if (equipoAsignado) {
+          const teamDelSaved = localStorage.getItem(`team_deleted_players_${equipoAsignado}`);
+          if (teamDelSaved) {
+            try {
+              const teamDelList: { id?: string; fullName: string }[] = JSON.parse(teamDelSaved);
+              if (teamDelList.some(dp => (dp.id && dp.id === id) || dp.fullName === normKey || dp.fullName === simpleName)) return true;
+            } catch {}
+          }
+        }
+        return false;
       };
 
       // Filter out deleted players
-      let currentList: Player[] = rawList.filter(p => !isDeletedPlayer(p.id, p.nombre, p.apellidos));
+      let currentList: Player[] = rawList.filter(p => !isDeletedPlayer(p.id, p.nombre, p.apellidos, p.equipo_asignado));
 
       // Deduplicate currentList
       const deduped: Player[] = [];
@@ -239,43 +268,49 @@ export default function Players() {
     try {
       const target = players.find(p => p.id === playerToDelete);
       const targetNormKey = target ? normalizePlayerNameKey(target.nombre, target.apellidos) : '';
-      const targetSimpleName = target ? `${target.nombre.trim()} ${target.apellidos.trim()}`.toLowerCase() : '';
+      const targetTeam = target?.equipo_asignado || '';
 
-      // Save to deleted lists
+      // Save to scouting_deleted_players by ID
       const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
       const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
       if (!scoutingDelList.includes(playerToDelete)) scoutingDelList.push(playerToDelete);
-      if (targetNormKey && !scoutingDelList.includes(targetNormKey)) scoutingDelList.push(targetNormKey);
-      if (targetSimpleName && !scoutingDelList.includes(targetSimpleName)) scoutingDelList.push(targetSimpleName);
       localStorage.setItem('scouting_deleted_players', JSON.stringify(scoutingDelList));
 
-      const teamDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
-      const teamDelList: { id?: string; fullName: string }[] = teamDelSaved ? JSON.parse(teamDelSaved) : [];
-      if (targetNormKey && !teamDelList.some(d => d.fullName === targetNormKey)) {
-        teamDelList.push({ id: playerToDelete, fullName: targetNormKey });
-        localStorage.setItem('team_deleted_players_SENIOR FEMENINO', JSON.stringify(teamDelList));
-      }
+      // Save to specific team deleted list if assigned
+      if (targetTeam) {
+        const teamDelKey = `team_deleted_players_${targetTeam}`;
+        const teamDelSaved = localStorage.getItem(teamDelKey);
+        const teamDelList: { id?: string; fullName: string }[] = teamDelSaved ? JSON.parse(teamDelSaved) : [];
+        if (targetNormKey && !teamDelList.some(d => d.fullName === targetNormKey)) {
+          teamDelList.push({ id: playerToDelete, fullName: targetNormKey });
+          localStorage.setItem(teamDelKey, JSON.stringify(teamDelList));
+        }
 
-      // Remove from team_roster_SENIOR FEMENINO in localStorage
-      const rosterKey = `team_roster_SENIOR FEMENINO`;
-      const rosterSaved = localStorage.getItem(rosterKey);
-      if (rosterSaved) {
-        try {
-          const rosterArr = JSON.parse(rosterSaved);
-          const filteredRoster = rosterArr.filter((p: any) => 
-            p.id !== playerToDelete && 
-            normalizePlayerNameKey(p.nombre, p.apellidos) !== targetNormKey
-          );
-          localStorage.setItem(rosterKey, JSON.stringify(filteredRoster));
-        } catch {}
+        // Remove from team roster for that team
+        const rosterKey = `team_roster_${targetTeam}`;
+        const rosterSaved = localStorage.getItem(rosterKey);
+        if (rosterSaved) {
+          try {
+            const rosterArr = JSON.parse(rosterSaved);
+            const filteredRoster = rosterArr.filter((p: any) => 
+              p.id !== playerToDelete && 
+              normalizePlayerNameKey(p.nombre, p.apellidos) !== targetNormKey
+            );
+            localStorage.setItem(rosterKey, JSON.stringify(filteredRoster));
+          } catch {}
+        }
       }
 
       // Delete from Supabase
       await supabase.from('players').delete().eq('id', playerToDelete);
-      if (target) {
-        await supabase.from('players').delete()
+      if (target && target.nombre && target.apellidos) {
+        let query = supabase.from('players').delete()
           .ilike('nombre', target.nombre.trim())
           .ilike('apellidos', target.apellidos.trim());
+        if (targetTeam) {
+          query = query.ilike('equipo_asignado', targetTeam);
+        }
+        await query;
       }
 
       toast.success('Jugadora eliminada correctamente');

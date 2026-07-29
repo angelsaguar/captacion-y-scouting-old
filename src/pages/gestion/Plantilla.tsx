@@ -2310,6 +2310,28 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
 
   // Load team roster from localStorage on team change
   useEffect(() => {
+    // 0. Cleanup/un-pollute any official female player keys mistakenly added to deleted lists by male player deletions
+    const femaleNormKeys = JUGADORAS_ADJUNTAS.map(j => normalizePlayerNameKey(j.nombre, j.apellidos));
+    const femaleIds = JUGADORAS_ADJUNTAS.map(j => j.id);
+
+    const femDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
+    if (femDelSaved) {
+      try {
+        const femDelList: { id?: string; fullName: string }[] = JSON.parse(femDelSaved);
+        const cleanedFem = femDelList.filter(item => !femaleNormKeys.includes(item.fullName) && !(item.id && femaleIds.includes(item.id)));
+        localStorage.setItem('team_deleted_players_SENIOR FEMENINO', JSON.stringify(cleanedFem));
+      } catch {}
+    }
+
+    const scoutDelSaved = localStorage.getItem('scouting_deleted_players');
+    if (scoutDelSaved) {
+      try {
+        const scoutList: string[] = JSON.parse(scoutDelSaved);
+        const cleanedScout = scoutList.filter(item => !femaleNormKeys.includes(item) && !femaleIds.includes(item));
+        localStorage.setItem('scouting_deleted_players', JSON.stringify(cleanedScout));
+      } catch {}
+    }
+
     const key = `team_roster_${selectedTeam}`;
     const saved = localStorage.getItem(key);
 
@@ -2317,13 +2339,9 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
     const deletedSaved = localStorage.getItem(deletedKey);
     const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
 
-    const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
-    const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
-
     const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
       const normKey = normalizePlayerNameKey(nombre, apellidos);
       const simpleFullName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
-      if (scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleFullName)) return true;
       return deletedPlayers.some(dp => 
         (dp.id && dp.id === id) || 
         dp.fullName === normKey || 
@@ -2331,7 +2349,7 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       );
     };
 
-    const officialTeamPlayers: TeamPlayer[] = JUGADORAS_ADJUNTAS.map(j => ({
+    const officialTeamPlayers: TeamPlayer[] = selectedTeam === 'SENIOR FEMENINO' ? JUGADORAS_ADJUNTAS.map(j => ({
       id: j.id,
       nombre: j.nombre,
       apellidos: j.apellidos,
@@ -2343,7 +2361,7 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       lateralidad: j.lateralidad || 'Derecho',
       estado_fisico: 'Disponible',
       email: `${j.nombre.toLowerCase().replace(/\s+/g, '')}@povedafemenino.es`
-    }));
+    })) : [];
 
     let currentRoster: TeamPlayer[] = [];
     if (saved) {
@@ -2593,18 +2611,14 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       if (!error && data) {
         setScoutingSignedPlayers(data);
 
-        // Get deleted player names and IDs to prevent auto-syncing them back
+        // Get deleted player names and IDs for selectedTeam
         const deletedKey = `team_deleted_players_${selectedTeam}`;
         const deletedSaved = localStorage.getItem(deletedKey);
         const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
 
-        const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
-        const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
-
         const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
           const normKey = normalizePlayerNameKey(nombre, apellidos);
           const simpleFullName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
-          if (scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleFullName)) return true;
           return deletedPlayers.some(dp => 
             (dp.id && dp.id === id) || 
             dp.fullName === normKey || 
@@ -3098,7 +3112,7 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
     );
     saveRoster(updated);
 
-    // 2. Save to team deleted list
+    // 2. Save to team deleted list (for selectedTeam only)
     const deletedKey = `team_deleted_players_${selectedTeam}`;
     const deletedSaved = localStorage.getItem(deletedKey);
     const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
@@ -3111,27 +3125,20 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       localStorage.setItem(deletedKey, JSON.stringify(deletedPlayers));
     }
 
-    // 3. Save to scouting deleted list
-    const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
-    const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
-    if (player.id && !scoutingDelList.includes(player.id)) scoutingDelList.push(player.id);
-    if (!scoutingDelList.includes(playerNormKey)) scoutingDelList.push(playerNormKey);
-    if (!scoutingDelList.includes(simpleFullName)) scoutingDelList.push(simpleFullName);
-    localStorage.setItem('scouting_deleted_players', JSON.stringify(scoutingDelList));
-
-    // 4. Clear selected profile if matches
+    // 3. Clear selected profile if matches
     if (selectedPlayerProfile && (selectedPlayerProfile.id === player.id || normalizePlayerNameKey(selectedPlayerProfile.nombre, selectedPlayerProfile.apellidos) === playerNormKey)) {
       setSelectedPlayerProfile(null);
     }
 
-    // 5. Delete from Supabase table asynchronously
+    // 4. Delete from Supabase table asynchronously (restricted to selectedTeam)
     try {
       if (player.id) {
         await supabase.from('players').delete().eq('id', player.id);
       }
       await supabase.from('players').delete()
         .ilike('nombre', player.nombre.trim())
-        .ilike('apellidos', player.apellidos.trim());
+        .ilike('apellidos', player.apellidos.trim())
+        .ilike('equipo_asignado', selectedTeam);
     } catch (err) {
       console.warn('Supabase delete warning:', err);
     }
