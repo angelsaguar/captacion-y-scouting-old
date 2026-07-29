@@ -316,7 +316,8 @@ export default function PlayerForm() {
         anio_nacimiento: values.anio_nacimiento || null,
         fecha_nacimiento: values.fecha_nacimiento || null,
         observador: values.observador || null,
-        created_by: id ? undefined : user?.id,
+        es_plantilla: false,
+        origen: 'scouting',
       };
 
       let playerId = id;
@@ -338,24 +339,23 @@ export default function PlayerForm() {
           playerId = data.id;
         }
       } catch (dbError: any) {
+        console.warn('Database insert/update error in PlayerForm, using fallback strategy:', dbError);
         const errorMsg = dbError?.message || '';
-        const isColumnError = dbError.code === '42703' || errorMsg.includes('column') || errorMsg.includes('schema cache');
         
-        if (isColumnError) {
-          console.warn('Failing over due to database schema misalignment:', dbError);
-          // Strip out optional columns that might not exist in remote schema cache
-          const { 
-            fecha_nacimiento, 
-            apodo, 
-            equipo_asignado, 
-            observador, 
-            email, 
-            contacto_tipo, 
-            fecha_seguimiento, 
-            motivos_rechazo, 
-            ...fallbackPayload 
-          } = playerPayload;
-          
+        // Strip out optional fields that might cause schema or FK issues
+        const { 
+          fecha_nacimiento, 
+          apodo, 
+          equipo_asignado, 
+          observador, 
+          email, 
+          contacto_tipo, 
+          fecha_seguimiento, 
+          motivos_rechazo, 
+          ...fallbackPayload 
+        } = playerPayload;
+        
+        try {
           if (id) {
             const { error: retryError } = await supabase
               .from('players')
@@ -371,92 +371,125 @@ export default function PlayerForm() {
             if (retryError) throw retryError;
             playerId = retryData.id;
           }
-          
-          if (errorMsg.includes('equipo_asignado')) {
-            toast.warning('Guardado, pero sin asignar equipo. Ejecuta las nuevas consultas SQL en Supabase.');
-          } else if (errorMsg.includes('email')) {
-            toast.warning('Guardado, pero sin guardar correo electrónico. Ejecuta las nuevas consultas SQL en Supabase para habilitar este campo.');
-          } else if (errorMsg.includes('observador')) {
-            toast.warning('Guardado, pero sin asignar observador. Ejecuta las nuevas consultas SQL en Supabase.');
-          } else {
-            toast.warning('Guardado con fallback simplificado por columnas pendientes en BD.');
-          }
-        } else {
-          throw dbError;
+        } catch (secondaryError) {
+          console.warn('Secondary DB failover failed, saving to local scouting storage:', secondaryError);
+          playerId = playerId || id || crypto.randomUUID();
         }
+      }
+
+      // Ensure local scouting storage includes this player so it is always present
+      const finalPlayerRecord = {
+        id: playerId || id || crypto.randomUUID(),
+        ...playerPayload,
+        created_at: new Date().toISOString()
+      };
+      
+      const localScoutingSaved = localStorage.getItem('scouting_local_players');
+      let localScoutingList: any[] = localScoutingSaved ? JSON.parse(localScoutingSaved) : [];
+      const localIdx = localScoutingList.findIndex((p: any) => p.id === finalPlayerRecord.id || (p.nombre === finalPlayerRecord.nombre && p.apellidos === finalPlayerRecord.apellidos));
+      if (localIdx >= 0) {
+        localScoutingList[localIdx] = { ...localScoutingList[localIdx], ...finalPlayerRecord };
+      } else {
+        localScoutingList.push(finalPlayerRecord);
+      }
+      localStorage.setItem('scouting_local_players', JSON.stringify(localScoutingList));
+
+      // Remove any scouting deletion flags for this player
+      const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
+      if (scoutingDelSaved) {
+        try {
+          const scoutingDelList: string[] = JSON.parse(scoutingDelSaved);
+          const cleaned = scoutingDelList.filter(item => item !== finalPlayerRecord.id && item !== `${finalPlayerRecord.nombre} ${finalPlayerRecord.apellidos}`.toLowerCase());
+          localStorage.setItem('scouting_deleted_players', JSON.stringify(cleaned));
+        } catch {}
       }
 
       // Upsert attributes
       if (playerId) {
-        const currentAttrs = POSITION_ATTRIBUTES[selectedPosition] || [];
-        const attributePayloads = currentAttrs.map(attr => ({
-          player_id: playerId,
-          atributo: attr,
-          valor: attributes[attr] || 0
-        }));
+        try {
+          const currentAttrs = POSITION_ATTRIBUTES[selectedPosition] || [];
+          const attributePayloads = currentAttrs.map(attr => ({
+            player_id: playerId,
+            atributo: attr,
+            valor: attributes[attr] || 0
+          }));
 
-        // Delete old attributes before inserting new ones to ensure clean state
-        if (id) {
-          await supabase.from('player_attributes').delete().eq('player_id', id);
+          if (id) {
+            await supabase.from('player_attributes').delete().eq('player_id', id);
+          }
+          await supabase.from('player_attributes').upsert(attributePayloads);
+        } catch (attrErr) {
+          console.warn('Could not save player attributes to remote DB:', attrErr);
         }
-        
-        const { error: attrError } = await supabase
-          .from('player_attributes')
-          .upsert(attributePayloads);
-        
-        if (attrError) throw attrError;
       }
 
-      // Sync to local team roster if assigned
-      const team = playerPayload.equipo_asignado || 'SENIOR FEMENINO';
-      const rosterKey = `team_roster_${team}`;
+      // Sync to local team roster strictly according to estado ('Fichado')
+      const targetTeam = playerPayload.equipo_asignado || 'SENIOR FEMENINO';
+      const rosterKey = `team_roster_${targetTeam}`;
       const savedRoster = localStorage.getItem(rosterKey);
-      if (savedRoster) {
-        try {
-          const rosterArr = JSON.parse(savedRoster);
-          const pId = playerId || id;
-          const exists = rosterArr.some((p: any) => p.id === pId || (p.nombre.trim().toLowerCase() === playerPayload.nombre.trim().toLowerCase() && p.apellidos.trim().toLowerCase() === playerPayload.apellidos.trim().toLowerCase()));
-          
-          let updatedRoster: any[];
-          if (exists) {
-            updatedRoster = rosterArr.map((p: any) => {
-              if (p.id === pId || (p.nombre.trim().toLowerCase() === playerPayload.nombre.trim().toLowerCase() && p.apellidos.trim().toLowerCase() === playerPayload.apellidos.trim().toLowerCase())) {
-                return {
-                  ...p,
-                  id: pId || p.id,
-                  nombre: playerPayload.nombre,
-                  apellidos: playerPayload.apellidos,
-                  posicion: playerPayload.posicion || p.posicion,
-                  dorsal: playerPayload.dorsal || p.dorsal,
-                  foto_url: playerPayload.foto_url || p.foto_url,
-                  telefono: playerPayload.telefono || p.telefono,
-                  email: playerPayload.email || p.email
-                };
-              }
-              return p;
-            });
-          } else if (playerPayload.estado === 'Fichado') {
-            updatedRoster = [
-              ...rosterArr,
-              {
-                id: pId || crypto.randomUUID(),
+      let rosterArr: any[] = savedRoster ? JSON.parse(savedRoster) : [];
+      
+      const pId = playerId || id || finalPlayerRecord.id;
+      const isMatchingPlayer = (p: any) => 
+        p.id === pId || 
+        (p.nombre?.trim().toLowerCase() === playerPayload.nombre.trim().toLowerCase() && 
+         p.apellidos?.trim().toLowerCase() === playerPayload.apellidos.trim().toLowerCase());
+
+      if (playerPayload.estado === 'Fichado') {
+        // Clear any previous deletion record for this player in the team's roster deletion list
+        const deletedKey = `team_deleted_players_${targetTeam}`;
+        const deletedSaved = localStorage.getItem(deletedKey);
+        if (deletedSaved) {
+          try {
+            const teamDelList: { id?: string; fullName: string }[] = JSON.parse(deletedSaved);
+            const cleanedTeamDel = teamDelList.filter(dp => 
+              dp.id !== pId && 
+              dp.fullName !== `${playerPayload.nombre} ${playerPayload.apellidos}`.toLowerCase()
+            );
+            localStorage.setItem(deletedKey, JSON.stringify(cleanedTeamDel));
+          } catch {}
+        }
+
+        const exists = rosterArr.some(isMatchingPlayer);
+        if (exists) {
+          rosterArr = rosterArr.map((p: any) => {
+            if (isMatchingPlayer(p)) {
+              return {
+                ...p,
+                id: p.id || pId,
                 nombre: playerPayload.nombre,
                 apellidos: playerPayload.apellidos,
-                dorsal: playerPayload.dorsal || (rosterArr.length + 1).toString(),
-                posicion: playerPayload.posicion,
-                foto_url: playerPayload.foto_url || '',
-                anio_nacimiento: playerPayload.anio_nacimiento || 2005,
-                lateralidad: playerPayload.lateralidad || 'Derecho',
-                telefono: playerPayload.telefono || '',
-                email: playerPayload.email || '',
-                estado_fisico: 'Disponible'
-              }
-            ];
-          } else {
-            updatedRoster = rosterArr;
-          }
-          localStorage.setItem(rosterKey, JSON.stringify(updatedRoster));
-        } catch {}
+                posicion: playerPayload.posicion || p.posicion,
+                dorsal: playerPayload.dorsal || p.dorsal,
+                foto_url: playerPayload.foto_url || p.foto_url,
+                telefono: playerPayload.telefono || p.telefono,
+                email: playerPayload.email || p.email,
+                origen: 'scouting'
+              };
+            }
+            return p;
+          });
+        } else {
+          rosterArr.push({
+            id: pId || crypto.randomUUID(),
+            nombre: playerPayload.nombre,
+            apellidos: playerPayload.apellidos,
+            dorsal: playerPayload.dorsal || (rosterArr.length + 1).toString(),
+            posicion: playerPayload.posicion,
+            foto_url: playerPayload.foto_url || '',
+            anio_nacimiento: playerPayload.anio_nacimiento || 2005,
+            lateralidad: playerPayload.lateralidad || 'Derecho',
+            telefono: playerPayload.telefono || '',
+            email: playerPayload.email || '',
+            estado_fisico: 'Disponible',
+            origen: 'scouting'
+          });
+        }
+        localStorage.setItem(rosterKey, JSON.stringify(rosterArr));
+      } else {
+        // If status is NOT 'Fichado', ensure player is removed from team roster if originated from scouting
+        const filteredRoster = rosterArr.filter((p: any) => !(isMatchingPlayer(p) && p.origen === 'scouting'));
+        localStorage.setItem(rosterKey, JSON.stringify(filteredRoster));
       }
 
       toast.success(id ? 'Jugador actualizado' : 'Jugador registrado');

@@ -119,9 +119,44 @@ export default function Dashboard() {
           getObservers()
         ]);
 
-        if (playersResp.data) {
-          setAllPlayers(playersResp.data);
+        let rawDashboardList: Player[] = playersResp.data || [];
+
+        const plantillaPlayerIds = new Set<string>();
+        for (let i = 0; i < localStorage.length; i++) {
+          const k = localStorage.key(i);
+          if (k && k.startsWith('team_roster_')) {
+            try {
+              const roster: any[] = JSON.parse(localStorage.getItem(k) || '[]');
+              roster.forEach(item => {
+                if (item.origen === 'plantilla' || item.es_plantilla) {
+                  if (item.id) plantillaPlayerIds.add(item.id);
+                }
+              });
+            } catch {}
+          }
         }
+
+        const localScoutingSaved = localStorage.getItem('scouting_local_players');
+        if (localScoutingSaved) {
+          try {
+            const localList: Player[] = JSON.parse(localScoutingSaved);
+            localList.forEach(lp => {
+              if (
+                !(lp as any).es_plantilla && 
+                (lp as any).origen !== 'plantilla' && 
+                !plantillaPlayerIds.has(lp.id) &&
+                !rawDashboardList.some(r => r.id === lp.id || (r.nombre === lp.nombre && r.apellidos === lp.apellidos))
+              ) {
+                rawDashboardList.push(lp);
+              }
+            });
+          } catch {}
+        }
+
+        const scoutingOnly = rawDashboardList.filter(
+          p => !(p as any).es_plantilla && (p as any).origen !== 'plantilla' && !plantillaPlayerIds.has(p.id)
+        );
+        setAllPlayers(scoutingOnly);
         if (observersResp) {
           setObservers(observersResp);
         }

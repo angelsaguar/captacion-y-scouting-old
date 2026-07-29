@@ -41,7 +41,10 @@ export default function Comparison() {
   useEffect(() => {
     async function fetchPlayers() {
       const { data } = await supabase.from('players').select('*, attributes:player_attributes(*)');
-      if (data) setPlayers(data);
+      if (data) {
+        const scoutingOnly = data.filter(p => !(p as any).es_plantilla && (p as any).origen !== 'plantilla');
+        setPlayers(scoutingOnly);
+      }
       setLoading(false);
     }
     fetchPlayers();

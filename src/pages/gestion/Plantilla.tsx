@@ -68,6 +68,8 @@ interface TeamPlayer {
   telefono?: string;
   email?: string;
   estado_fisico: 'Disponible' | 'Lesionado' | 'Duda';
+  origen?: 'plantilla' | 'scouting';
+  es_plantilla?: boolean;
   // Extra stats
   partidos_jugados?: number;
   minutos_jugados?: number;
@@ -2282,7 +2284,9 @@ export default function Plantilla() {
         email: updatedPlayer.email || null,
         estado: 'Fichado',
         equipo_asignado: selectedTeam,
-        equipo_actual: 'UD La Poveda'
+        equipo_actual: 'UD La Poveda',
+        es_plantilla: (updatedPlayer as any).origen === 'scouting' ? false : true,
+        origen: (updatedPlayer as any).origen || 'plantilla'
       };
 
       const { error } = await supabase.from('players').upsert(payload);
@@ -2581,84 +2585,122 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
 
   const fetchSignedScoutingPlayers = async () => {
     try {
+      let dataList: any[] = [];
       const { data, error } = await supabase
         .from('players')
         .select('*')
         .eq('estado', 'Fichado');
       
       if (!error && data) {
-        setScoutingSignedPlayers(data);
+        dataList = data;
+      }
 
-        // Get deleted player names and IDs for selectedTeam
-        const deletedKey = `team_deleted_players_${selectedTeam}`;
-        const deletedSaved = localStorage.getItem(deletedKey);
-        const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
-
-        const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
-          const normKey = normalizePlayerNameKey(nombre, apellidos);
-          const simpleFullName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
-          return deletedPlayers.some(dp => 
-            (dp.id && dp.id === id) || 
-            dp.fullName === normKey || 
-            dp.fullName === simpleFullName
-          );
-        };
-
-        // Auto-sync signed players assigned to selectedTeam
-        const teamSigned = data.filter(p => {
-          const matchTeam = p.equipo_asignado?.toUpperCase() === selectedTeam.toUpperCase();
-          if (!matchTeam) return false;
-          return !isDeletedPlayer(p.id, p.nombre, p.apellidos);
-        });
-
-        if (teamSigned.length > 0) {
-          const key = `team_roster_${selectedTeam}`;
-          const saved = localStorage.getItem(key);
-          let roster: TeamPlayer[] = saved ? JSON.parse(saved) : [];
-          let changed = false;
-
-          teamSigned.forEach(sp => {
-            const spNormKey = normalizePlayerNameKey(sp.nombre, sp.apellidos);
-            const exists = roster.some(p => 
-              p.id === sp.id || normalizePlayerNameKey(p.nombre, p.apellidos) === spNormKey
-            );
-            if (!exists) {
-              const newPlayer: TeamPlayer = {
-                id: sp.id || crypto.randomUUID(),
-                nombre: sp.nombre.trim(),
-                apellidos: sp.apellidos.trim() === 'Marta Pulido' ? 'Pulido' : sp.apellidos.trim(),
-                dorsal: sp.dorsal || (roster.length + 1).toString(),
-                posicion: sp.posicion,
-                foto_url: sp.foto_url || '',
-                anio_nacimiento: sp.anio_nacimiento || 2005,
-                lateralidad: sp.lateralidad || 'Derecho',
-                telefono: sp.telefono || '',
-                email: sp.email || '',
-                estado_fisico: 'Disponible'
-              };
-              roster.push(newPlayer);
-              changed = true;
+      // Merge local scouting players
+      const localScoutingSaved = localStorage.getItem('scouting_local_players');
+      if (localScoutingSaved) {
+        try {
+          const localList: any[] = JSON.parse(localScoutingSaved);
+          localList.forEach(lp => {
+            if (lp.estado === 'Fichado') {
+              const exists = dataList.some(d => d.id === lp.id || (d.nombre === lp.nombre && d.apellidos === lp.apellidos));
+              if (!exists) {
+                dataList.push(lp);
+              }
             }
           });
+        } catch {}
+      }
 
-          // Deduplicate entire roster
-          const cleanDeduplicatedRoster: TeamPlayer[] = [];
-          const seenKeys = new Set<string>();
-          roster.forEach(p => {
-            const k = normalizePlayerNameKey(p.nombre, p.apellidos);
-            if (!seenKeys.has(k) && !isDeletedPlayer(p.id, p.nombre, p.apellidos)) {
-              seenKeys.add(k);
-              cleanDeduplicatedRoster.push(p);
-            } else {
-              changed = true;
-            }
-          });
+      // Filter scouting-only signed players
+      const scoutingSigned = dataList.filter(p => !p.es_plantilla && p.origen !== 'plantilla' && p.estado === 'Fichado');
+      setScoutingSignedPlayers(scoutingSigned);
 
-          if (changed) {
-            localStorage.setItem(key, JSON.stringify(cleanDeduplicatedRoster));
-            setPlayers(cleanDeduplicatedRoster);
+      // Get deleted player names and IDs for selectedTeam
+      const deletedKey = `team_deleted_players_${selectedTeam}`;
+      const deletedSaved = localStorage.getItem(deletedKey);
+      const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
+
+      const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
+        const normKey = normalizePlayerNameKey(nombre, apellidos);
+        const simpleFullName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
+        return deletedPlayers.some(dp => 
+          (dp.id && dp.id === id) || 
+          dp.fullName === normKey || 
+          dp.fullName === simpleFullName
+        );
+      };
+
+      // Auto-sync signed players assigned to selectedTeam
+      const teamSigned = scoutingSigned.filter(p => {
+        const matchTeam = p.equipo_asignado ? (p.equipo_asignado.toUpperCase() === selectedTeam.toUpperCase()) : (selectedTeam === 'SENIOR FEMENINO');
+        if (!matchTeam) return false;
+        return !isDeletedPlayer(p.id, p.nombre, p.apellidos);
+      });
+
+      const key = `team_roster_${selectedTeam}`;
+      const saved = localStorage.getItem(key);
+      let roster: TeamPlayer[] = saved ? JSON.parse(saved) : [];
+      let changed = false;
+
+      // Add signed players from scouting
+      teamSigned.forEach(sp => {
+        const spNormKey = normalizePlayerNameKey(sp.nombre, sp.apellidos);
+        const exists = roster.some(p => 
+          p.id === sp.id || normalizePlayerNameKey(p.nombre, p.apellidos) === spNormKey
+        );
+        if (!exists) {
+          const newPlayer: TeamPlayer = {
+            id: sp.id || crypto.randomUUID(),
+            nombre: sp.nombre.trim(),
+            apellidos: sp.apellidos.trim() === 'Marta Pulido' ? 'Pulido' : sp.apellidos.trim(),
+            dorsal: sp.dorsal || (roster.length + 1).toString(),
+            posicion: sp.posicion,
+            foto_url: sp.foto_url || '',
+            anio_nacimiento: sp.anio_nacimiento || 2005,
+            lateralidad: sp.lateralidad || 'Derecho',
+            telefono: sp.telefono || '',
+            email: sp.email || '',
+            estado_fisico: 'Disponible',
+            origen: 'scouting'
+          };
+          roster.push(newPlayer);
+          changed = true;
+        }
+      });
+
+      // Remove any player from roster if they came from scouting but are no longer signed ('Fichado')
+      const validSignedKeys = new Set(scoutingSigned.map(sp => normalizePlayerNameKey(sp.nombre, sp.apellidos)));
+      const validSignedIds = new Set(scoutingSigned.map(sp => sp.id));
+
+      const filteredRoster = roster.filter(p => {
+        if ((p as any).origen === 'scouting') {
+          const pKey = normalizePlayerNameKey(p.nombre, p.apellidos);
+          const isStillSigned = validSignedIds.has(p.id) || validSignedKeys.has(pKey);
+          if (!isStillSigned) {
+            changed = true;
+            return false;
           }
         }
+        return true;
+      });
+      roster = filteredRoster;
+
+      // Deduplicate entire roster
+      const cleanDeduplicatedRoster: TeamPlayer[] = [];
+      const seenKeys = new Set<string>();
+      roster.forEach(p => {
+        const k = normalizePlayerNameKey(p.nombre, p.apellidos);
+        if (!seenKeys.has(k) && !isDeletedPlayer(p.id, p.nombre, p.apellidos)) {
+          seenKeys.add(k);
+          cleanDeduplicatedRoster.push(p);
+        } else {
+          changed = true;
+        }
+      });
+
+      if (changed) {
+        localStorage.setItem(key, JSON.stringify(cleanDeduplicatedRoster));
+        setPlayers(cleanDeduplicatedRoster);
       }
     } catch (e) {
       console.error(e);
@@ -2700,7 +2742,9 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
           email: player.email || null,
           foto_url: player.foto_url || null,
           estado: 'Fichado',
-          equipo_asignado: selectedTeam
+          equipo_asignado: selectedTeam,
+          es_plantilla: (player as any).origen === 'scouting' ? false : true,
+          origen: (player as any).origen || 'plantilla'
         };
 
         const { error } = await supabase
@@ -2939,7 +2983,9 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
               email: selectedPlayerProfile.email || null,
               foto_url: selectedPlayerProfile.foto_url || null,
               estado: 'Fichado',
-              equipo_asignado: selectedTeam
+              equipo_asignado: selectedTeam,
+              es_plantilla: (selectedPlayerProfile as any).origen === 'scouting' ? false : true,
+              origen: (selectedPlayerProfile as any).origen || 'plantilla'
             })
             .select()
             .single();
@@ -3037,7 +3083,9 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       ...formData,
       nombre: formData.nombre.trim(),
       apellidos: formData.apellidos.trim(),
-      dorsal: formData.dorsal?.trim() || (players.length + 1).toString()
+      dorsal: formData.dorsal?.trim() || (players.length + 1).toString(),
+      origen: 'plantilla',
+      es_plantilla: true
     };
 
     // Remove any previous deletion records for this player's name or ID
@@ -3086,7 +3134,9 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
         email: newPlayer.email || null,
         estado: 'Fichado',
         equipo_asignado: selectedTeam,
-        equipo_actual: 'UD La Poveda'
+        equipo_actual: 'UD La Poveda',
+        es_plantilla: true,
+        origen: 'plantilla'
       };
 
       const { error } = await supabase.from('players').upsert(payload);

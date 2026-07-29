@@ -37,7 +37,8 @@ export default function Analytics() {
 
   useEffect(() => {
     async function fetchAnalytics() {
-      const { data: players } = await supabase.from('players').select('*');
+      const { data: rawPlayers } = await supabase.from('players').select('*');
+      const players = (rawPlayers || []).filter(p => !(p as any).es_plantilla && (p as any).origen !== 'plantilla');
       if (players) {
         // Group by position
         const posMap = players.reduce((acc: any, p) => {

@@ -51,6 +51,7 @@ import {
 import { toast } from 'sonner';
 import { useAuthStore } from '@/store/useAuthStore';
 import { ConfirmModal } from '@/components/ui/ConfirmModal';
+import { CreatePlayerModal } from '@/components/CreatePlayerModal';
 import { Label } from '@/components/ui/label';
 
 export default function Players() {
@@ -81,6 +82,7 @@ export default function Players() {
   }, [search, filterStatus, filterPosition, filterLateralidad, filterBirthYear, filterEquipoAsignado, filterEquipoActual, filterObservador]);
   const [observers, setObservers] = useState<Observer[]>([]);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [playerToDelete, setPlayerToDelete] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
@@ -101,9 +103,6 @@ export default function Players() {
     try {
       let query = supabase.from('players').select('*, attributes:player_attributes(*)');
 
-      if (search) {
-        query = query.or(`nombre.ilike.%${search}%,apellidos.ilike.%${search}%,apodo.ilike.%${search}%`);
-      }
       if (filterStatus) {
         query = query.eq('estado', filterStatus);
       }
@@ -138,29 +137,75 @@ export default function Players() {
       if (error) throw error;
       let rawList: Player[] = data || [];
 
-      // Deleted players lists
+      // Collect IDs and normalized name keys of all players created in Plantilla (Gestión de Equipo)
+      const plantillaPlayerIds = new Set<string>();
+      const plantillaPlayerKeys = new Set<string>();
+      for (let i = 0; i < localStorage.length; i++) {
+        const k = localStorage.key(i);
+        if (k && k.startsWith('team_roster_')) {
+          try {
+            const roster: any[] = JSON.parse(localStorage.getItem(k) || '[]');
+            roster.forEach(item => {
+              if (item.origen === 'plantilla' || item.es_plantilla) {
+                if (item.id) plantillaPlayerIds.add(item.id);
+                plantillaPlayerKeys.add(normalizePlayerNameKey(item.nombre, item.apellidos));
+                plantillaPlayerKeys.add(`${(item.nombre||'').trim()} ${(item.apellidos||'').trim()}`.toLowerCase());
+              }
+            });
+          } catch {}
+        }
+      }
+
+      // Merge local scouting players
+      const localScoutingSaved = localStorage.getItem('scouting_local_players');
+      if (localScoutingSaved) {
+        try {
+          const localScoutingList: Player[] = JSON.parse(localScoutingSaved);
+          const cleanedScoutingList = localScoutingList.filter(lp => {
+            if ((lp as any).es_plantilla || (lp as any).origen === 'plantilla') return false;
+            if (plantillaPlayerIds.has(lp.id)) return false;
+            const normKey = normalizePlayerNameKey(lp.nombre, lp.apellidos);
+            const simpleName = `${(lp.nombre||'').trim()} ${(lp.apellidos||'').trim()}`.toLowerCase();
+            if (plantillaPlayerKeys.has(normKey) || plantillaPlayerKeys.has(simpleName)) return false;
+            return true;
+          });
+          cleanedScoutingList.forEach(lp => {
+            const lpKey = normalizePlayerNameKey(lp.nombre, lp.apellidos);
+            const idx = rawList.findIndex(r => r.id === lp.id || normalizePlayerNameKey(r.nombre, r.apellidos) === lpKey);
+            if (idx >= 0) {
+              rawList[idx] = { ...rawList[idx], ...lp };
+            } else {
+              rawList.push(lp);
+            }
+          });
+          if (cleanedScoutingList.length !== localScoutingList.length) {
+            localStorage.setItem('scouting_local_players', JSON.stringify(cleanedScoutingList));
+          }
+        } catch {}
+      }
+
+      // Strictly exclude players created in Gestión de Equipo -> Plantilla
+      rawList = rawList.filter(p => {
+        if ((p as any).es_plantilla || (p as any).origen === 'plantilla') return false;
+        if (plantillaPlayerIds.has(p.id)) return false;
+        const normKey = normalizePlayerNameKey(p.nombre, p.apellidos);
+        const simpleName = `${(p.nombre||'').trim()} ${(p.apellidos||'').trim()}`.toLowerCase();
+        if (plantillaPlayerKeys.has(normKey) || plantillaPlayerKeys.has(simpleName)) return false;
+        return true;
+      });
+
+      // Deleted players lists for scouting
       const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
       const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
 
-      const isDeletedPlayer = (id: string, nombre: string, apellidos: string, equipoAsignado?: string) => {
+      const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
         const normKey = normalizePlayerNameKey(nombre, apellidos);
         const simpleName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
-        if (scoutingDelList.includes(id)) return true;
-
-        if (equipoAsignado) {
-          const teamDelSaved = localStorage.getItem(`team_deleted_players_${equipoAsignado}`);
-          if (teamDelSaved) {
-            try {
-              const teamDelList: { id?: string; fullName: string }[] = JSON.parse(teamDelSaved);
-              if (teamDelList.some(dp => (dp.id && dp.id === id) || dp.fullName === normKey || dp.fullName === simpleName)) return true;
-            } catch {}
-          }
-        }
-        return false;
+        return scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleName);
       };
 
       // Filter out deleted players
-      let currentList: Player[] = rawList.filter(p => !isDeletedPlayer(p.id, p.nombre, p.apellidos, p.equipo_asignado));
+      let currentList: Player[] = rawList.filter(p => !isDeletedPlayer(p.id, p.nombre, p.apellidos));
 
       // Deduplicate currentList
       const deduped: Player[] = [];
@@ -178,36 +223,54 @@ export default function Players() {
       });
       currentList = deduped;
 
-      // If no search filter is active and list is missing any of the 15 official players, merge them
-      if (!search && !filterStatus && !filterPosition && !filterLateralidad && !filterBirthYear && !filterEquipoAsignado && !filterEquipoActual && !filterObservador) {
-        const officialConverted: Player[] = JUGADORAS_ADJUNTAS.map(j => ({
-          id: j.id,
-          nombre: j.nombre,
-          apellidos: j.apellidos,
-          posicion: j.posicion,
-          dorsal: j.dorsal,
-          lateralidad: j.lateralidad || 'Derecho',
-          anio_nacimiento: j.anio_nacimiento,
-          fecha_nacimiento: j.fecha_nacimiento,
-          foto_url: j.foto_url,
-          estado: 'Fichado',
-          potencial: j.potencial,
-          equipo_actual: j.equipo_actual || 'UD La Poveda',
-          equipo_asignado: 'SENIOR FEMENINO',
-          observaciones: `Posición principal: ${j.posicion_detalle}. Fecha nacimiento: ${j.fecha_nacimiento}`
-        }));
+      // Merge default official players if missing
+      const officialConverted: Player[] = JUGADORAS_ADJUNTAS.map(j => ({
+        id: j.id,
+        nombre: j.nombre,
+        apellidos: j.apellidos,
+        posicion: j.posicion,
+        dorsal: j.dorsal,
+        lateralidad: j.lateralidad || 'Derecho',
+        anio_nacimiento: j.anio_nacimiento,
+        fecha_nacimiento: j.fecha_nacimiento,
+        foto_url: j.foto_url,
+        estado: 'Fichado',
+        potencial: j.potencial,
+        equipo_actual: j.equipo_actual || 'UD La Poveda',
+        equipo_asignado: 'SENIOR FEMENINO',
+        observaciones: `Posición principal: ${j.posicion_detalle}. Fecha nacimiento: ${j.fecha_nacimiento}`
+      }));
 
-        officialConverted.forEach(oj => {
-          if (!isDeletedPlayer(oj.id, oj.nombre, oj.apellidos)) {
-            const ojKey = normalizePlayerNameKey(oj.nombre, oj.apellidos);
-            const exists = currentList.some(p => 
-              p.id === oj.id || normalizePlayerNameKey(p.nombre, p.apellidos) === ojKey
-            );
-            if (!exists) {
-              currentList.push(oj);
-            }
+      officialConverted.forEach(oj => {
+        if (!isDeletedPlayer(oj.id, oj.nombre, oj.apellidos)) {
+          const ojKey = normalizePlayerNameKey(oj.nombre, oj.apellidos);
+          const exists = currentList.some(p => 
+            p.id === oj.id || normalizePlayerNameKey(p.nombre, p.apellidos) === ojKey
+          );
+          if (!exists) {
+            currentList.push(oj);
           }
-        });
+        }
+      });
+
+      // Apply robust client-side search filtering (name, nickname, club)
+      if (search.trim()) {
+        const normalizeText = (str: string) =>
+          (str || '')
+            .toLowerCase()
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .trim();
+
+        const searchClean = normalizeText(search);
+        const searchWords = searchClean.split(/\s+/).filter(Boolean);
+
+        if (searchWords.length > 0) {
+          currentList = currentList.filter(p => {
+            const playerStr = normalizeText(`${p.nombre} ${p.apellidos} ${p.apodo || ''} ${p.equipo_actual || ''} ${p.posicion || ''}`);
+            return searchWords.every(word => playerStr.includes(word));
+          });
+        }
       }
 
       setPlayers(currentList);
@@ -369,12 +432,13 @@ export default function Players() {
               <List className="h-4 w-4" />
             </Button>
           </div>
-          <Link to="/players/new">
-            <Button className="bg-red-600 hover:bg-red-700 text-white rounded-full font-bold shadow-lg shadow-red-900/30">
-              <Plus className="w-4 h-4 mr-2" />
-              Nuevo Jugador
-            </Button>
-          </Link>
+          <Button 
+            onClick={() => setIsCreateModalOpen(true)}
+            className="bg-red-600 hover:bg-red-700 text-white rounded-full font-bold shadow-lg shadow-red-900/30"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Nuevo Jugador
+          </Button>
         </div>
       </div>
 
@@ -791,6 +855,11 @@ export default function Players() {
         }}
         variant="danger"
         isSubmitting={isDeleting}
+      />
+      <CreatePlayerModal
+        isOpen={isCreateModalOpen}
+        onClose={() => setIsCreateModalOpen(false)}
+        onPlayerCreated={fetchPlayers}
       />
     </div>
   );
