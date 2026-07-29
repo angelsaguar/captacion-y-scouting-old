@@ -153,10 +153,37 @@ export default function PlayerDetail() {
         if (retryError) throw retryError;
       }
 
-      setPlayer({
+      const updatedObj = {
         ...player,
         ...payload
-      });
+      };
+      setPlayer(updatedObj);
+
+      // Sync to local team roster if applicable
+      const team = updatedObj.equipo_asignado || 'SENIOR FEMENINO';
+      const rosterKey = `team_roster_${team}`;
+      const savedRoster = localStorage.getItem(rosterKey);
+      if (savedRoster) {
+        try {
+          const rosterArr = JSON.parse(savedRoster);
+          const updatedRoster = rosterArr.map((p: any) => {
+            if (p.id === updatedObj.id || (p.nombre.trim().toLowerCase() === player.nombre.trim().toLowerCase() && p.apellidos.trim().toLowerCase() === player.apellidos.trim().toLowerCase())) {
+              return {
+                ...p,
+                nombre: updatedObj.nombre,
+                apellidos: updatedObj.apellidos,
+                posicion: updatedObj.posicion || p.posicion,
+                dorsal: updatedObj.dorsal || p.dorsal,
+                foto_url: updatedObj.foto_url || p.foto_url,
+                telefono: updatedObj.telefono || p.telefono,
+                email: updatedObj.email || p.email
+              };
+            }
+            return p;
+          });
+          localStorage.setItem(rosterKey, JSON.stringify(updatedRoster));
+        } catch {}
+      }
 
       toast.success('¡Datos personales guardados y sincronizados correctamente!');
       setShowEditPersonalModal(false);

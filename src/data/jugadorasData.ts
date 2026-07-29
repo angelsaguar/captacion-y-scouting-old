@@ -133,7 +133,7 @@ export const JUGADORAS_ADJUNTAS: JugadoraOficial[] = [
   {
     id: '10000000-0000-4000-8000-000000000008',
     nombre: 'Marta',
-    apellidos: 'Marta Pulido',
+    apellidos: 'Pulido',
     fecha_nacimiento: '01/02/1996',
     anio_nacimiento: 1996,
     posicion: 'MEDIA PUNTA',

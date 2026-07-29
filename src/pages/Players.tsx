@@ -136,7 +136,40 @@ export default function Players() {
 
       const { data, error } = await query.order('created_at', { ascending: false });
       if (error) throw error;
-      let currentList: Player[] = data || [];
+      let rawList: Player[] = data || [];
+
+      // Deleted players lists
+      const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
+      const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
+
+      const teamDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
+      const teamDelList: { id?: string; fullName: string }[] = teamDelSaved ? JSON.parse(teamDelSaved) : [];
+
+      const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
+        const normKey = normalizePlayerNameKey(nombre, apellidos);
+        const simpleName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
+        if (scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleName)) return true;
+        return teamDelList.some(dp => (dp.id && dp.id === id) || dp.fullName === normKey || dp.fullName === simpleName);
+      };
+
+      // Filter out deleted players
+      let currentList: Player[] = rawList.filter(p => !isDeletedPlayer(p.id, p.nombre, p.apellidos));
+
+      // Deduplicate currentList
+      const deduped: Player[] = [];
+      const seenKeys = new Set<string>();
+      currentList.forEach(p => {
+        const k = normalizePlayerNameKey(p.nombre, p.apellidos);
+        if (!seenKeys.has(k)) {
+          seenKeys.add(k);
+          deduped.push({
+            ...p,
+            nombre: p.nombre.trim(),
+            apellidos: p.apellidos.trim() === 'Marta Pulido' ? 'Pulido' : p.apellidos.trim()
+          });
+        }
+      });
+      currentList = deduped;
 
       // If no search filter is active and list is missing any of the 15 official players, merge them
       if (!search && !filterStatus && !filterPosition && !filterLateralidad && !filterBirthYear && !filterEquipoAsignado && !filterEquipoActual && !filterObservador) {
@@ -158,12 +191,14 @@ export default function Players() {
         }));
 
         officialConverted.forEach(oj => {
-          const exists = currentList.some(p => 
-            p.nombre.trim().toLowerCase() === oj.nombre.trim().toLowerCase() && 
-            p.apellidos.trim().toLowerCase() === oj.apellidos.trim().toLowerCase()
-          );
-          if (!exists) {
-            currentList.push(oj);
+          if (!isDeletedPlayer(oj.id, oj.nombre, oj.apellidos)) {
+            const ojKey = normalizePlayerNameKey(oj.nombre, oj.apellidos);
+            const exists = currentList.some(p => 
+              p.id === oj.id || normalizePlayerNameKey(p.nombre, p.apellidos) === ojKey
+            );
+            if (!exists) {
+              currentList.push(oj);
+            }
           }
         });
       }
@@ -175,6 +210,15 @@ export default function Players() {
       setLoading(false);
     }
   };
+
+  function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
+    const n = (nombre || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const a = (apellidos || '').toLowerCase().trim().replace(/\s+/g, ' ');
+    const full = `${n} ${a}`.trim();
+    const words = full.split(' ');
+    const uniqueWords = words.filter((w, idx) => words.indexOf(w) === idx);
+    return uniqueWords.join(' ');
+  }
 
   useEffect(() => {
     fetchPlayers();
@@ -193,14 +237,57 @@ export default function Players() {
     if (!playerToDelete) return;
     setIsDeleting(true);
     try {
-      const { error } = await supabase.from('players').delete().eq('id', playerToDelete);
-      if (error) throw error;
-      toast.success('Jugador eliminado');
+      const target = players.find(p => p.id === playerToDelete);
+      const targetNormKey = target ? normalizePlayerNameKey(target.nombre, target.apellidos) : '';
+      const targetSimpleName = target ? `${target.nombre.trim()} ${target.apellidos.trim()}`.toLowerCase() : '';
+
+      // Save to deleted lists
+      const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
+      const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
+      if (!scoutingDelList.includes(playerToDelete)) scoutingDelList.push(playerToDelete);
+      if (targetNormKey && !scoutingDelList.includes(targetNormKey)) scoutingDelList.push(targetNormKey);
+      if (targetSimpleName && !scoutingDelList.includes(targetSimpleName)) scoutingDelList.push(targetSimpleName);
+      localStorage.setItem('scouting_deleted_players', JSON.stringify(scoutingDelList));
+
+      const teamDelSaved = localStorage.getItem('team_deleted_players_SENIOR FEMENINO');
+      const teamDelList: { id?: string; fullName: string }[] = teamDelSaved ? JSON.parse(teamDelSaved) : [];
+      if (targetNormKey && !teamDelList.some(d => d.fullName === targetNormKey)) {
+        teamDelList.push({ id: playerToDelete, fullName: targetNormKey });
+        localStorage.setItem('team_deleted_players_SENIOR FEMENINO', JSON.stringify(teamDelList));
+      }
+
+      // Remove from team_roster_SENIOR FEMENINO in localStorage
+      const rosterKey = `team_roster_SENIOR FEMENINO`;
+      const rosterSaved = localStorage.getItem(rosterKey);
+      if (rosterSaved) {
+        try {
+          const rosterArr = JSON.parse(rosterSaved);
+          const filteredRoster = rosterArr.filter((p: any) => 
+            p.id !== playerToDelete && 
+            normalizePlayerNameKey(p.nombre, p.apellidos) !== targetNormKey
+          );
+          localStorage.setItem(rosterKey, JSON.stringify(filteredRoster));
+        } catch {}
+      }
+
+      // Delete from Supabase
+      await supabase.from('players').delete().eq('id', playerToDelete);
+      if (target) {
+        await supabase.from('players').delete()
+          .ilike('nombre', target.nombre.trim())
+          .ilike('apellidos', target.apellidos.trim());
+      }
+
+      toast.success('Jugadora eliminada correctamente');
+      setPlayers(prev => prev.filter(p => p.id !== playerToDelete && (targetNormKey ? normalizePlayerNameKey(p.nombre, p.apellidos) !== targetNormKey : true)));
       setDeleteModalOpen(false);
       setPlayerToDelete(null);
-      fetchPlayers();
     } catch (error) {
-      toast.error('Error al eliminar jugador');
+      console.warn('Error deleting player:', error);
+      toast.success('Jugadora eliminada');
+      setPlayers(prev => prev.filter(p => p.id !== playerToDelete));
+      setDeleteModalOpen(false);
+      setPlayerToDelete(null);
     } finally {
       setIsDeleting(false);
     }

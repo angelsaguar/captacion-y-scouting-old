@@ -2235,7 +2235,7 @@ export default function Plantilla() {
     });
   };
 
-  const handleSaveRosterPlayerEdit = (e: React.FormEvent) => {
+  const handleSaveRosterPlayerEdit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingRosterPlayer) return;
 
@@ -2266,14 +2266,70 @@ export default function Plantilla() {
       setSelectedPlayerProfile(updatedPlayer);
     }
 
+    // Sync updated player data to Supabase
+    try {
+      const payload: any = {
+        id: updatedPlayer.id,
+        nombre: updatedPlayer.nombre,
+        apellidos: updatedPlayer.apellidos,
+        apodo: updatedPlayer.apodo || null,
+        dorsal: updatedPlayer.dorsal || null,
+        posicion: updatedPlayer.posicion,
+        foto_url: updatedPlayer.foto_url || null,
+        anio_nacimiento: updatedPlayer.anio_nacimiento ? parseInt(updatedPlayer.anio_nacimiento as any) : null,
+        lateralidad: updatedPlayer.lateralidad || 'Derecho',
+        telefono: updatedPlayer.telefono || null,
+        email: updatedPlayer.email || null,
+        estado: 'Fichado',
+        equipo_asignado: selectedTeam,
+        equipo_actual: 'UD La Poveda'
+      };
+
+      const { error } = await supabase.from('players').upsert(payload);
+      if (error) {
+        console.warn('Supabase upsert failover for player edit:', error);
+        const { fecha_nacimiento, equipo_asignado, apodo, observador, email, ...fallback } = payload;
+        await supabase.from('players').upsert(fallback);
+      }
+    } catch (dbErr) {
+      console.warn('Could not sync player edit to Supabase:', dbErr);
+    }
+
     toast.success(`Datos de ${updatedPlayer.nombre} ${updatedPlayer.apellidos} actualizados correctamente.`);
     setEditingRosterPlayer(null);
   };
+
+function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
+  const n = (nombre || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const a = (apellidos || '').toLowerCase().trim().replace(/\s+/g, ' ');
+  const full = `${n} ${a}`.trim();
+  const words = full.split(' ');
+  const uniqueWords = words.filter((w, idx) => words.indexOf(w) === idx);
+  return uniqueWords.join(' ');
+}
 
   // Load team roster from localStorage on team change
   useEffect(() => {
     const key = `team_roster_${selectedTeam}`;
     const saved = localStorage.getItem(key);
+
+    const deletedKey = `team_deleted_players_${selectedTeam}`;
+    const deletedSaved = localStorage.getItem(deletedKey);
+    const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
+
+    const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
+    const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
+
+    const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
+      const normKey = normalizePlayerNameKey(nombre, apellidos);
+      const simpleFullName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
+      if (scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleFullName)) return true;
+      return deletedPlayers.some(dp => 
+        (dp.id && dp.id === id) || 
+        dp.fullName === normKey || 
+        dp.fullName === simpleFullName
+      );
+    };
 
     const officialTeamPlayers: TeamPlayer[] = JUGADORAS_ADJUNTAS.map(j => ({
       id: j.id,
@@ -2296,29 +2352,44 @@ export default function Plantilla() {
       } catch {}
     }
 
-    // Merge official 15 players if missing or if roster contains old demo entries
-    const isMissingOfficial = officialTeamPlayers.some(oj => 
-      !currentRoster.some(p => p.nombre.toLowerCase().trim() === oj.nombre.toLowerCase().trim() && p.apellidos.toLowerCase().trim() === oj.apellidos.toLowerCase().trim())
-    );
-    const hasDemo = currentRoster.some(p => p.nombre === 'Carlos' || p.nombre === 'Marcos' || (p.nombre === 'Marina' && p.apellidos === 'Sierra Garcia'));
+    // Filter out deleted players & demo entries
+    currentRoster = currentRoster.filter(p => {
+      const isDemo = p.nombre === 'Carlos' || p.nombre === 'Marcos' || (p.nombre === 'Marina' && p.apellidos === 'Sierra Garcia');
+      if (isDemo) return false;
+      return !isDeletedPlayer(p.id, p.nombre, p.apellidos);
+    });
 
-    if (currentRoster.length < 15 || isMissingOfficial || hasDemo) {
-      const merged: TeamPlayer[] = [...officialTeamPlayers];
-      currentRoster.forEach(p => {
-        const isDemo = p.nombre === 'Carlos' || p.nombre === 'Marcos' || (p.nombre === 'Marina' && p.apellidos === 'Sierra Garcia');
-        const alreadyInOfficial = officialTeamPlayers.some(oj => 
-          oj.nombre.toLowerCase().trim() === p.nombre.toLowerCase().trim() && 
-          oj.apellidos.toLowerCase().trim() === p.apellidos.toLowerCase().trim()
+    // Merge missing non-deleted official players if missing
+    officialTeamPlayers.forEach(oj => {
+      if (!isDeletedPlayer(oj.id, oj.nombre, oj.apellidos)) {
+        const ojKey = normalizePlayerNameKey(oj.nombre, oj.apellidos);
+        const exists = currentRoster.some(p => 
+          p.id === oj.id || normalizePlayerNameKey(p.nombre, p.apellidos) === ojKey
         );
-        if (!isDemo && !alreadyInOfficial) {
-          merged.push(p);
+        if (!exists) {
+          currentRoster.push(oj);
         }
-      });
-      currentRoster = merged;
-      localStorage.setItem(key, JSON.stringify(currentRoster));
-    }
+      }
+    });
 
-    setPlayers(currentRoster);
+    // Deduplicate entire currentRoster
+    const cleanDeduplicatedRoster: TeamPlayer[] = [];
+    const seenKeys = new Set<string>();
+
+    currentRoster.forEach(p => {
+      const keyStr = normalizePlayerNameKey(p.nombre, p.apellidos);
+      if (!seenKeys.has(keyStr) && !isDeletedPlayer(p.id, p.nombre, p.apellidos)) {
+        seenKeys.add(keyStr);
+        cleanDeduplicatedRoster.push({
+          ...p,
+          nombre: p.nombre.trim(),
+          apellidos: p.apellidos.trim() === 'Marta Pulido' ? 'Pulido' : p.apellidos.trim()
+        });
+      }
+    });
+
+    localStorage.setItem(key, JSON.stringify(cleanDeduplicatedRoster));
+    setPlayers(cleanDeduplicatedRoster);
 
     const evaluationsKey = `team_evaluations_${selectedTeam}`;
     const savedEvaluations = localStorage.getItem(evaluationsKey);
@@ -2527,16 +2598,25 @@ export default function Plantilla() {
         const deletedSaved = localStorage.getItem(deletedKey);
         const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
 
+        const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
+        const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
+
+        const isDeletedPlayer = (id: string, nombre: string, apellidos: string) => {
+          const normKey = normalizePlayerNameKey(nombre, apellidos);
+          const simpleFullName = `${(nombre||'').trim()} ${(apellidos||'').trim()}`.toLowerCase();
+          if (scoutingDelList.includes(id) || scoutingDelList.includes(normKey) || scoutingDelList.includes(simpleFullName)) return true;
+          return deletedPlayers.some(dp => 
+            (dp.id && dp.id === id) || 
+            dp.fullName === normKey || 
+            dp.fullName === simpleFullName
+          );
+        };
+
         // Auto-sync signed players assigned to SENIOR FEMENINO
         const seniorFemeninoSigned = data.filter(p => {
           const matchTeam = p.equipo_asignado?.toUpperCase() === 'SENIOR FEMENINO';
           if (!matchTeam) return false;
-          
-          const fullName = `${p.nombre.trim()} ${p.apellidos.trim()}`.toLowerCase();
-          const isDeleted = deletedPlayers.some(dp => 
-            (dp.id && dp.id === p.id) || dp.fullName === fullName
-          );
-          return !isDeleted;
+          return !isDeletedPlayer(p.id, p.nombre, p.apellidos);
         });
 
         if (seniorFemeninoSigned.length > 0) {
@@ -2546,15 +2626,15 @@ export default function Plantilla() {
           let changed = false;
 
           seniorFemeninoSigned.forEach(sp => {
+            const spNormKey = normalizePlayerNameKey(sp.nombre, sp.apellidos);
             const exists = roster.some(p => 
-              p.nombre.trim().toLowerCase() === sp.nombre.trim().toLowerCase() && 
-              p.apellidos.trim().toLowerCase() === sp.apellidos.trim().toLowerCase()
+              p.id === sp.id || normalizePlayerNameKey(p.nombre, p.apellidos) === spNormKey
             );
             if (!exists) {
               const newPlayer: TeamPlayer = {
                 id: sp.id || crypto.randomUUID(),
-                nombre: sp.nombre,
-                apellidos: sp.apellidos,
+                nombre: sp.nombre.trim(),
+                apellidos: sp.apellidos.trim() === 'Marta Pulido' ? 'Pulido' : sp.apellidos.trim(),
                 dorsal: sp.dorsal || (roster.length + 1).toString(),
                 posicion: sp.posicion,
                 foto_url: sp.foto_url || '',
@@ -2569,12 +2649,24 @@ export default function Plantilla() {
             }
           });
 
-          if (changed) {
-            localStorage.setItem(key, JSON.stringify(roster));
-            if (selectedTeam === 'SENIOR FEMENINO') {
-              setPlayers(roster);
+          // Deduplicate entire roster
+          const cleanDeduplicatedRoster: TeamPlayer[] = [];
+          const seenKeys = new Set<string>();
+          roster.forEach(p => {
+            const k = normalizePlayerNameKey(p.nombre, p.apellidos);
+            if (!seenKeys.has(k) && !isDeletedPlayer(p.id, p.nombre, p.apellidos)) {
+              seenKeys.add(k);
+              cleanDeduplicatedRoster.push(p);
+            } else {
+              changed = true;
             }
-            toast.success('Se han sincronizado automáticamente los fichajes de Scouting al Senior Femenino.');
+          });
+
+          if (changed) {
+            localStorage.setItem(key, JSON.stringify(cleanDeduplicatedRoster));
+            if (selectedTeam === 'SENIOR FEMENINO') {
+              setPlayers(cleanDeduplicatedRoster);
+            }
           }
         }
       }
@@ -2929,7 +3021,7 @@ export default function Plantilla() {
     }
   };
 
-  const handleAddPlayer = (e: React.FormEvent) => {
+  const handleAddPlayer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!formData.nombre.trim() || !formData.apellidos.trim()) {
       toast.error('Nombre y Apellidos son obligatorios');
@@ -2939,12 +3031,44 @@ export default function Plantilla() {
     const newPlayer: TeamPlayer = {
       id: crypto.randomUUID(),
       ...formData,
-      dorsal: formData.dorsal || (players.length + 1).toString()
+      nombre: formData.nombre.trim(),
+      apellidos: formData.apellidos.trim(),
+      dorsal: formData.dorsal?.trim() || (players.length + 1).toString()
     };
 
     const updated = [...players, newPlayer];
     saveRoster(updated);
-    toast.success(`${newPlayer.nombre} ha sido añadido a la plantilla.`);
+
+    // Sync new player to Supabase
+    try {
+      const payload: any = {
+        id: newPlayer.id,
+        nombre: newPlayer.nombre,
+        apellidos: newPlayer.apellidos,
+        apodo: newPlayer.apodo || null,
+        dorsal: newPlayer.dorsal || null,
+        posicion: newPlayer.posicion,
+        foto_url: newPlayer.foto_url || null,
+        anio_nacimiento: newPlayer.anio_nacimiento ? parseInt(newPlayer.anio_nacimiento as any) : null,
+        lateralidad: newPlayer.lateralidad || 'Derecho',
+        telefono: newPlayer.telefono || null,
+        email: newPlayer.email || null,
+        estado: 'Fichado',
+        equipo_asignado: selectedTeam,
+        equipo_actual: 'UD La Poveda'
+      };
+
+      const { error } = await supabase.from('players').upsert(payload);
+      if (error) {
+        console.warn('Supabase upsert failover for new player:', error);
+        const { fecha_nacimiento, equipo_asignado, apodo, observador, email, ...fallback } = payload;
+        await supabase.from('players').upsert(fallback);
+      }
+    } catch (dbErr) {
+      console.warn('Could not sync new player to Supabase:', dbErr);
+    }
+
+    toast.success(`${newPlayer.nombre} ${newPlayer.apellidos} ha sido añadida a la plantilla.`);
     
     // Clear form
     setFormData({
@@ -2963,26 +3087,56 @@ export default function Plantilla() {
     setShowAddForm(false);
   };
 
-  const handleDeletePlayer = (player: TeamPlayer) => {
-    const updated = players.filter(p => p.id !== player.id);
+  const handleDeletePlayer = async (player: TeamPlayer) => {
+    const playerNormKey = normalizePlayerNameKey(player.nombre, player.apellidos);
+    const simpleFullName = `${player.nombre.trim()} ${player.apellidos.trim()}`.toLowerCase();
+
+    // 1. Filter out from players state
+    const updated = players.filter(p => 
+      p.id !== player.id && 
+      normalizePlayerNameKey(p.nombre, p.apellidos) !== playerNormKey
+    );
     saveRoster(updated);
 
-    // Save to deleted list to prevent auto-syncing back
+    // 2. Save to team deleted list
     const deletedKey = `team_deleted_players_${selectedTeam}`;
     const deletedSaved = localStorage.getItem(deletedKey);
     const deletedPlayers: { id?: string; fullName: string }[] = deletedSaved ? JSON.parse(deletedSaved) : [];
     
-    const fullName = `${player.nombre.trim()} ${player.apellidos.trim()}`.toLowerCase();
-    const alreadyStored = deletedPlayers.some(dp => 
-      (dp.id && dp.id === player.id) || dp.fullName === fullName
-    );
-    
-    if (!alreadyStored) {
-      deletedPlayers.push({ id: player.id, fullName });
+    if (!deletedPlayers.some(dp => (dp.id && dp.id === player.id) || dp.fullName === playerNormKey)) {
+      deletedPlayers.push({ id: player.id, fullName: playerNormKey });
+      if (simpleFullName !== playerNormKey) {
+        deletedPlayers.push({ id: player.id, fullName: simpleFullName });
+      }
       localStorage.setItem(deletedKey, JSON.stringify(deletedPlayers));
     }
 
-    toast.success(`${player.nombre} ${player.apellidos} ha sido eliminado de la plantilla.`);
+    // 3. Save to scouting deleted list
+    const scoutingDelSaved = localStorage.getItem('scouting_deleted_players');
+    const scoutingDelList: string[] = scoutingDelSaved ? JSON.parse(scoutingDelSaved) : [];
+    if (player.id && !scoutingDelList.includes(player.id)) scoutingDelList.push(player.id);
+    if (!scoutingDelList.includes(playerNormKey)) scoutingDelList.push(playerNormKey);
+    if (!scoutingDelList.includes(simpleFullName)) scoutingDelList.push(simpleFullName);
+    localStorage.setItem('scouting_deleted_players', JSON.stringify(scoutingDelList));
+
+    // 4. Clear selected profile if matches
+    if (selectedPlayerProfile && (selectedPlayerProfile.id === player.id || normalizePlayerNameKey(selectedPlayerProfile.nombre, selectedPlayerProfile.apellidos) === playerNormKey)) {
+      setSelectedPlayerProfile(null);
+    }
+
+    // 5. Delete from Supabase table asynchronously
+    try {
+      if (player.id) {
+        await supabase.from('players').delete().eq('id', player.id);
+      }
+      await supabase.from('players').delete()
+        .ilike('nombre', player.nombre.trim())
+        .ilike('apellidos', player.apellidos.trim());
+    } catch (err) {
+      console.warn('Supabase delete warning:', err);
+    }
+
+    toast.success(`${player.nombre} ${player.apellidos} ha sido eliminada de la plantilla.`);
   };
 
   const handleImportPlayer = (scoutPlayer: Player) => {

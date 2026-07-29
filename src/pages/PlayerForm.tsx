@@ -407,6 +407,58 @@ export default function PlayerForm() {
         if (attrError) throw attrError;
       }
 
+      // Sync to local team roster if assigned
+      const team = playerPayload.equipo_asignado || 'SENIOR FEMENINO';
+      const rosterKey = `team_roster_${team}`;
+      const savedRoster = localStorage.getItem(rosterKey);
+      if (savedRoster) {
+        try {
+          const rosterArr = JSON.parse(savedRoster);
+          const pId = playerId || id;
+          const exists = rosterArr.some((p: any) => p.id === pId || (p.nombre.trim().toLowerCase() === playerPayload.nombre.trim().toLowerCase() && p.apellidos.trim().toLowerCase() === playerPayload.apellidos.trim().toLowerCase()));
+          
+          let updatedRoster: any[];
+          if (exists) {
+            updatedRoster = rosterArr.map((p: any) => {
+              if (p.id === pId || (p.nombre.trim().toLowerCase() === playerPayload.nombre.trim().toLowerCase() && p.apellidos.trim().toLowerCase() === playerPayload.apellidos.trim().toLowerCase())) {
+                return {
+                  ...p,
+                  id: pId || p.id,
+                  nombre: playerPayload.nombre,
+                  apellidos: playerPayload.apellidos,
+                  posicion: playerPayload.posicion || p.posicion,
+                  dorsal: playerPayload.dorsal || p.dorsal,
+                  foto_url: playerPayload.foto_url || p.foto_url,
+                  telefono: playerPayload.telefono || p.telefono,
+                  email: playerPayload.email || p.email
+                };
+              }
+              return p;
+            });
+          } else if (playerPayload.estado === 'Fichado') {
+            updatedRoster = [
+              ...rosterArr,
+              {
+                id: pId || crypto.randomUUID(),
+                nombre: playerPayload.nombre,
+                apellidos: playerPayload.apellidos,
+                dorsal: playerPayload.dorsal || (rosterArr.length + 1).toString(),
+                posicion: playerPayload.posicion,
+                foto_url: playerPayload.foto_url || '',
+                anio_nacimiento: playerPayload.anio_nacimiento || 2005,
+                lateralidad: playerPayload.lateralidad || 'Derecho',
+                telefono: playerPayload.telefono || '',
+                email: playerPayload.email || '',
+                estado_fisico: 'Disponible'
+              }
+            ];
+          } else {
+            updatedRoster = rosterArr;
+          }
+          localStorage.setItem(rosterKey, JSON.stringify(updatedRoster));
+        } catch {}
+      }
+
       toast.success(id ? 'Jugador actualizado' : 'Jugador registrado');
       navigate('/players');
     } catch (error: any) {
