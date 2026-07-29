@@ -2288,7 +2288,7 @@ export default function Plantilla() {
       const { error } = await supabase.from('players').upsert(payload);
       if (error) {
         console.warn('Supabase upsert failover for player edit:', error);
-        const { fecha_nacimiento, equipo_asignado, apodo, observador, email, ...fallback } = payload;
+        const { fecha_nacimiento, apodo, observador, email, ...fallback } = payload;
         await supabase.from('players').upsert(fallback);
       }
     } catch (dbErr) {
@@ -2604,20 +2604,20 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
           );
         };
 
-        // Auto-sync signed players assigned to SENIOR FEMENINO
-        const seniorFemeninoSigned = data.filter(p => {
-          const matchTeam = p.equipo_asignado?.toUpperCase() === 'SENIOR FEMENINO';
+        // Auto-sync signed players assigned to selectedTeam
+        const teamSigned = data.filter(p => {
+          const matchTeam = p.equipo_asignado?.toUpperCase() === selectedTeam.toUpperCase();
           if (!matchTeam) return false;
           return !isDeletedPlayer(p.id, p.nombre, p.apellidos);
         });
 
-        if (seniorFemeninoSigned.length > 0) {
-          const key = `team_roster_SENIOR FEMENINO`;
+        if (teamSigned.length > 0) {
+          const key = `team_roster_${selectedTeam}`;
           const saved = localStorage.getItem(key);
           let roster: TeamPlayer[] = saved ? JSON.parse(saved) : [];
           let changed = false;
 
-          seniorFemeninoSigned.forEach(sp => {
+          teamSigned.forEach(sp => {
             const spNormKey = normalizePlayerNameKey(sp.nombre, sp.apellidos);
             const exists = roster.some(p => 
               p.id === sp.id || normalizePlayerNameKey(p.nombre, p.apellidos) === spNormKey
@@ -2656,9 +2656,7 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
 
           if (changed) {
             localStorage.setItem(key, JSON.stringify(cleanDeduplicatedRoster));
-            if (selectedTeam === 'SENIOR FEMENINO') {
-              setPlayers(cleanDeduplicatedRoster);
-            }
+            setPlayers(cleanDeduplicatedRoster);
           }
         }
       }
@@ -3042,6 +3040,33 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       dorsal: formData.dorsal?.trim() || (players.length + 1).toString()
     };
 
+    // Remove any previous deletion records for this player's name or ID
+    const normKey = normalizePlayerNameKey(newPlayer.nombre, newPlayer.apellidos);
+    const simpleFullName = `${newPlayer.nombre} ${newPlayer.apellidos}`.toLowerCase();
+
+    const deletedKey = `team_deleted_players_${selectedTeam}`;
+    const deletedSaved = localStorage.getItem(deletedKey);
+    if (deletedSaved) {
+      try {
+        const deletedPlayers: { id?: string; fullName: string }[] = JSON.parse(deletedSaved);
+        const cleaned = deletedPlayers.filter(dp => 
+          dp.id !== newPlayer.id && 
+          dp.fullName !== normKey && 
+          dp.fullName !== simpleFullName
+        );
+        localStorage.setItem(deletedKey, JSON.stringify(cleaned));
+      } catch {}
+    }
+
+    const scoutDelSaved = localStorage.getItem('scouting_deleted_players');
+    if (scoutDelSaved) {
+      try {
+        const scoutList: string[] = JSON.parse(scoutDelSaved);
+        const cleanedScout = scoutList.filter(item => item !== newPlayer.id && item !== normKey && item !== simpleFullName);
+        localStorage.setItem('scouting_deleted_players', JSON.stringify(cleanedScout));
+      } catch {}
+    }
+
     const updated = [...players, newPlayer];
     saveRoster(updated);
 
@@ -3067,12 +3092,14 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
       const { error } = await supabase.from('players').upsert(payload);
       if (error) {
         console.warn('Supabase upsert failover for new player:', error);
-        const { fecha_nacimiento, equipo_asignado, apodo, observador, email, ...fallback } = payload;
+        const { fecha_nacimiento, apodo, observador, email, ...fallback } = payload;
         await supabase.from('players').upsert(fallback);
       }
     } catch (dbErr) {
       console.warn('Could not sync new player to Supabase:', dbErr);
     }
+
+    await fetchSignedScoutingPlayers();
 
     toast.success(`${newPlayer.nombre} ${newPlayer.apellidos} ha sido añadida a la plantilla.`);
     
@@ -3420,9 +3447,10 @@ function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
                 </Button>
                 <Button 
                   type="submit" 
-                  className="text-xs bg-blue-600 hover:bg-blue-500 text-white"
+                  className="text-xs bg-blue-600 hover:bg-blue-500 text-white font-bold flex items-center gap-1.5"
                 >
-                  Guardar Jugadora
+                  <Save className="w-4 h-4" />
+                  <span>Guardar Jugadora / Guardar Cambios</span>
                 </Button>
               </div>
             </form>
