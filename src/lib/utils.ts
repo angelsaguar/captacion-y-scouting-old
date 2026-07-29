@@ -17,3 +17,10 @@ export function generateUUID(): string {
   });
 }
 
+export function normalizePlayerNameKey(nombre?: string, apellidos?: string): string {
+  const n = (nombre || '').trim().toLowerCase();
+  let a = (apellidos || '').trim().toLowerCase();
+  if (a === 'marta pulido') a = 'pulido';
+  return `${n} ${a}`.trim();
+}
+

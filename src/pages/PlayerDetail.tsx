@@ -52,7 +52,8 @@ import { es } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { jsPDF } from 'jspdf';
 import * as XLSX from 'xlsx';
-import { cn } from '@/lib/utils';
+import { cn, normalizePlayerNameKey } from '@/lib/utils';
+import { JUGADORAS_ADJUNTAS } from '@/data/jugadorasData';
 import { useAuthStore } from '@/store/useAuthStore';
 import {
   DropdownMenu,
@@ -96,6 +97,62 @@ export default function PlayerDetail() {
         estado: player.estado
       });
       setShowEditPersonalModal(true);
+    }
+  };
+
+  const handleQuickStatusChange = async (newStatus: PlayerStatus) => {
+    if (!player) return;
+    try {
+      const payload = { estado: newStatus };
+
+      try {
+        await supabase
+          .from('players')
+          .update(payload)
+          .eq('id', player.id);
+      } catch (e) {
+        console.warn('DB status update failover:', e);
+      }
+
+      const updatedObj = { ...player, estado: newStatus };
+      setPlayer(updatedObj);
+
+      // Update local scouting storage
+      const localScoutingSaved = localStorage.getItem('scouting_local_players');
+      let localScoutingList: any[] = localScoutingSaved ? JSON.parse(localScoutingSaved) : [];
+      const normKey = normalizePlayerNameKey(updatedObj.nombre, updatedObj.apellidos);
+      const localIdx = localScoutingList.findIndex((p: any) => 
+        p.id === updatedObj.id || 
+        normalizePlayerNameKey(p.nombre, p.apellidos) === normKey
+      );
+
+      if (localIdx >= 0) {
+        localScoutingList[localIdx] = { ...localScoutingList[localIdx], estado: newStatus };
+      } else {
+        localScoutingList.push(updatedObj);
+      }
+      localStorage.setItem('scouting_local_players', JSON.stringify(localScoutingList));
+
+      // Sync to team roster if applicable
+      const team = updatedObj.equipo_asignado || 'SENIOR FEMENINO';
+      const rosterKey = `team_roster_${team}`;
+      const savedRoster = localStorage.getItem(rosterKey);
+      if (savedRoster) {
+        try {
+          const rosterArr = JSON.parse(savedRoster);
+          const updatedRoster = rosterArr.map((p: any) => {
+            if (p.id === updatedObj.id || (p.nombre.trim().toLowerCase() === player.nombre.trim().toLowerCase() && p.apellidos.trim().toLowerCase() === player.apellidos.trim().toLowerCase())) {
+              return { ...p, estado: newStatus };
+            }
+            return p;
+          });
+          localStorage.setItem(rosterKey, JSON.stringify(updatedRoster));
+        } catch {}
+      }
+
+      toast.success(`Estado actualizado a "${newStatus}"`);
+    } catch (err: any) {
+      toast.error('Error al actualizar estado');
     }
   };
 
@@ -159,6 +216,22 @@ export default function PlayerDetail() {
       };
       setPlayer(updatedObj);
 
+      // Save to local scouting storage so changes persist reliably
+      const localScoutingSaved = localStorage.getItem('scouting_local_players');
+      let localScoutingList: any[] = localScoutingSaved ? JSON.parse(localScoutingSaved) : [];
+      const normKey = normalizePlayerNameKey(updatedObj.nombre, updatedObj.apellidos);
+      const localIdx = localScoutingList.findIndex((p: any) => 
+        p.id === updatedObj.id || 
+        normalizePlayerNameKey(p.nombre, p.apellidos) === normKey
+      );
+
+      if (localIdx >= 0) {
+        localScoutingList[localIdx] = { ...localScoutingList[localIdx], ...updatedObj };
+      } else {
+        localScoutingList.push(updatedObj);
+      }
+      localStorage.setItem('scouting_local_players', JSON.stringify(localScoutingList));
+
       // Sync to local team roster if applicable
       const team = updatedObj.equipo_asignado || 'SENIOR FEMENINO';
       const rosterKey = `team_roster_${team}`;
@@ -176,7 +249,8 @@ export default function PlayerDetail() {
                 dorsal: updatedObj.dorsal || p.dorsal,
                 foto_url: updatedObj.foto_url || p.foto_url,
                 telefono: updatedObj.telefono || p.telefono,
-                email: updatedObj.email || p.email
+                email: updatedObj.email || p.email,
+                estado: updatedObj.estado
               };
             }
             return p;
@@ -196,14 +270,48 @@ export default function PlayerDetail() {
   useEffect(() => {
     async function fetchPlayer() {
       try {
-        const { data, error } = await supabase
-          .from('players')
-          .select('*, attributes:player_attributes(*)')
-          .eq('id', id)
-          .single();
+        let loaded: any = null;
 
-        if (error) throw error;
-        setPlayer(data);
+        try {
+          const { data, error } = await supabase
+            .from('players')
+            .select('*, attributes:player_attributes(*)')
+            .eq('id', id)
+            .maybeSingle();
+
+          if (data) {
+            loaded = data;
+          }
+        } catch (e) {
+          console.warn('Supabase fetch error:', e);
+        }
+
+        if (!loaded) {
+          const localScoutingSaved = localStorage.getItem('scouting_local_players');
+          if (localScoutingSaved) {
+            try {
+              const list = JSON.parse(localScoutingSaved);
+              loaded = list.find((p: any) => p.id === id || normalizePlayerNameKey(p.nombre, p.apellidos) === normalizePlayerNameKey(id, ''));
+            } catch {}
+          }
+        }
+
+        if (!loaded) {
+          const official = JUGADORAS_ADJUNTAS.find(j => j.id === id);
+          if (official) {
+            loaded = {
+              ...official,
+              estado: 'Fichado',
+              equipo_asignado: 'SENIOR FEMENINO'
+            };
+          }
+        }
+
+        if (loaded) {
+          setPlayer(loaded);
+        } else {
+          toast.error('No se pudo encontrar el jugador');
+        }
       } catch (error) {
         toast.error('Error al cargar datos del jugador');
       } finally {
@@ -534,17 +642,32 @@ export default function PlayerDetail() {
                     </span>
                   )}
                 </h1>
-                <Badge className={cn(
-                  "px-2 py-0.5 sm:px-3 sm:py-1 text-[8px] sm:text-[10px] font-black uppercase tracking-widest border-none shadow-lg outline-none",
-                  player.estado === 'Rechazado' ? "bg-red-600 text-white" :
-                  player.estado === 'Observado' ? "bg-slate-600 text-white" :
-                  player.estado === 'En seguimiento' ? "bg-blue-600 text-white" :
-                  player.estado === 'Interesa' ? "bg-yellow-600 text-white" :
-                  player.estado === 'Fichado' ? "bg-emerald-600 text-white" :
-                  "bg-slate-600 text-white"
-                )}>
-                  {player.estado}
-                </Badge>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Badge className={cn(
+                      "px-2 py-0.5 sm:px-3 sm:py-1 text-[8px] sm:text-[10px] font-black uppercase tracking-widest border-none shadow-lg outline-none cursor-pointer hover:opacity-80 transition-opacity",
+                      player.estado === 'Rechazado' ? "bg-red-600 text-white" :
+                      player.estado === 'Observado' ? "bg-slate-600 text-white" :
+                      player.estado === 'En seguimiento' ? "bg-blue-600 text-white" :
+                      player.estado === 'Interesa' ? "bg-yellow-600 text-white" :
+                      player.estado === 'Fichado' ? "bg-emerald-600 text-white" :
+                      "bg-slate-600 text-white"
+                    )}>
+                      {player.estado} ▾
+                    </Badge>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="start" className="bg-slate-900 border-slate-800 text-white shadow-xl">
+                    {(['Observado', 'En seguimiento', 'Interesa', 'Fichado', 'Rechazado'] as PlayerStatus[]).map(st => (
+                      <DropdownMenuItem 
+                        key={st} 
+                        onClick={() => handleQuickStatusChange(st)}
+                        className="cursor-pointer text-xs font-semibold focus:bg-slate-800"
+                      >
+                        {st === player.estado ? <span className="text-emerald-400 font-bold">✓ {st}</span> : st}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
               <div className="flex flex-wrap items-center gap-y-1 gap-x-3 mt-1.5 text-[9px] sm:text-[10px] text-slate-500 font-black uppercase tracking-widest">
                 <span className="flex items-center gap-1"><Users className="w-3 h-3" /> {player.posicion}</span>

@@ -247,6 +247,45 @@ export default function Admin() {
         }
       }
 
+      // Sync Scouting Local Players
+      const localScoutingSaved = localStorage.getItem('scouting_local_players');
+      if (localScoutingSaved) {
+        try {
+          const scoutingList = JSON.parse(localScoutingSaved);
+          for (const sp of scoutingList) {
+            const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(sp.id);
+            const targetId = isUuid ? sp.id : crypto.randomUUID();
+            const payload = {
+              id: targetId,
+              nombre: sp.nombre,
+              apellidos: sp.apellidos,
+              apodo: sp.apodo || null,
+              posicion: sp.posicion,
+              dorsal: sp.dorsal || null,
+              lateralidad: sp.lateralidad || 'Derecho',
+              anio_nacimiento: sp.anio_nacimiento ? parseInt(sp.anio_nacimiento as any) : null,
+              fecha_nacimiento: sp.fecha_nacimiento || null,
+              telefono: sp.telefono || null,
+              email: sp.email || null,
+              contacto_tipo: sp.contacto_tipo || 'Tutor',
+              equipo_actual: sp.equipo_actual || null,
+              equipo_asignado: sp.equipo_asignado || null,
+              foto_url: sp.foto_url || null,
+              observaciones: sp.observaciones || null,
+              potencial: sp.potencial || 3,
+              estado: sp.estado || 'Observado',
+              observador: sp.observador || null,
+              es_plantilla: false,
+              origen: 'scouting'
+            };
+            const { error } = await supabase.from('players').upsert(payload);
+            if (!error) stats.players++;
+          }
+        } catch (e) {
+          console.error('Error syncing local scouting players:', e);
+        }
+      }
+
       // 2. Sync Matches
       toast.loading('Sincronizando histórico de partidos...', { id: toastId });
       for (const team of CLUB_TEAMS) {

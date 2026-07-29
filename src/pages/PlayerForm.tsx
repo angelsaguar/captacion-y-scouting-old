@@ -45,29 +45,30 @@ import {
 import { toast } from 'sonner';
 import { Slider } from '@/components/ui/slider';
 import { useAuthStore } from '@/store/useAuthStore';
-import { cn } from '@/lib/utils';
+import { cn, normalizePlayerNameKey } from '@/lib/utils';
 import { getObservers, addObserver } from '@/lib/observers';
+import { JUGADORAS_ADJUNTAS } from '@/data/jugadorasData';
 
   const playerSchema = z.object({
-  nombre: z.string().min(2, 'Nombre requerido'),
-  apellidos: z.string().min(2, 'Apellidos requeridos'),
+  nombre: z.string().min(1, 'Nombre requerido'),
+  apellidos: z.string().min(1, 'Apellidos requeridos'),
   apodo: z.string().nullable().optional(),
   telefono: z.string().nullable().optional(),
-  email: z.string().email('Correo electrónico no válido').or(z.literal('')).nullable().optional(),
-  contacto_tipo: z.enum(['Padre', 'Madre', 'Jugador']),
+  email: z.string().nullable().optional(),
+  contacto_tipo: z.string().nullable().optional(),
   equipo_actual: z.string().nullable().optional(),
   equipo_asignado: z.string().nullable().optional(),
   dorsal: z.string().nullable().optional(),
   posicion: z.string().min(1, 'Posición requerida'),
-  lateralidad: z.enum(['Izquierdo', 'Derecho', 'Ambidiestro']),
-  anio_nacimiento: z.number().int().min(1900).max(2026).optional(),
+  lateralidad: z.string().nullable().optional(),
+  anio_nacimiento: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(v => (v ? Number(v) || undefined : undefined)).optional(),
   fecha_nacimiento: z.string().nullable().optional(),
   foto_url: z.string().nullable().optional(),
   observaciones: z.string().nullable().optional(),
   motivos_rechazo: z.string().nullable().optional(),
   fecha_seguimiento: z.string().nullable().optional(),
-  potencial: z.number().min(1).max(5),
-  estado: z.enum(['Observado', 'En seguimiento', 'Interesa', 'Fichado', 'Rechazado']),
+  potencial: z.union([z.number(), z.string(), z.null(), z.undefined()]).transform(v => (v ? Number(v) || 3 : 3)).optional(),
+  estado: z.string().nullable().optional(),
   observador: z.string().nullable().optional(),
 });
 
@@ -143,43 +144,74 @@ export default function PlayerForm() {
     if (id) {
       async function fetchPlayer() {
         try {
-          const { data: player, error } = await supabase
-            .from('players')
-            .select('*, attributes:player_attributes(*)')
-            .eq('id', id)
-            .single();
+          let loadedPlayer: any = null;
+          
+          try {
+            const { data: player, error } = await supabase
+              .from('players')
+              .select('*, attributes:player_attributes(*)')
+              .eq('id', id)
+              .maybeSingle();
 
-          if (error) throw error;
+            if (player) {
+              loadedPlayer = player;
+            }
+          } catch (e) {
+            console.warn('Could not fetch player from remote Supabase:', e);
+          }
 
-          if (player) {
+          if (!loadedPlayer) {
+            const localScoutingSaved = localStorage.getItem('scouting_local_players');
+            if (localScoutingSaved) {
+              try {
+                const list = JSON.parse(localScoutingSaved);
+                loadedPlayer = list.find((p: any) => p.id === id || normalizePlayerNameKey(p.nombre, p.apellidos) === normalizePlayerNameKey(id, ''));
+              } catch {}
+            }
+          }
+
+          if (!loadedPlayer) {
+            const official = JUGADORAS_ADJUNTAS.find(j => j.id === id);
+            if (official) {
+              loadedPlayer = {
+                ...official,
+                estado: 'Fichado',
+                equipo_asignado: 'SENIOR FEMENINO'
+              };
+            }
+          }
+
+          if (loadedPlayer) {
             form.reset({
-              nombre: player.nombre,
-              apellidos: player.apellidos,
-              apodo: player.apodo || '',
-              telefono: player.telefono || '',
-              email: player.email || '',
-              contacto_tipo: player.contacto_tipo as any,
-              equipo_actual: player.equipo_actual || '',
-              equipo_asignado: player.equipo_asignado || '',
-              dorsal: player.dorsal || '',
-              posicion: player.posicion,
-              lateralidad: player.lateralidad as any,
-              anio_nacimiento: player.anio_nacimiento,
-              fecha_nacimiento: player.fecha_nacimiento || '',
-              foto_url: player.foto_url || '',
-              observaciones: player.observaciones || '',
-              fecha_seguimiento: player.fecha_seguimiento || '',
-              potencial: player.potencial,
-              estado: player.estado as any,
-              observador: player.observador || '',
+              nombre: loadedPlayer.nombre,
+              apellidos: loadedPlayer.apellidos,
+              apodo: loadedPlayer.apodo || '',
+              telefono: loadedPlayer.telefono || '',
+              email: loadedPlayer.email || '',
+              contacto_tipo: loadedPlayer.contacto_tipo as any || 'Tutor',
+              equipo_actual: loadedPlayer.equipo_actual || '',
+              equipo_asignado: loadedPlayer.equipo_asignado || '',
+              dorsal: loadedPlayer.dorsal || '',
+              posicion: loadedPlayer.posicion,
+              lateralidad: loadedPlayer.lateralidad as any || 'Derecho',
+              anio_nacimiento: loadedPlayer.anio_nacimiento,
+              fecha_nacimiento: loadedPlayer.fecha_nacimiento || '',
+              foto_url: loadedPlayer.foto_url || '',
+              observaciones: loadedPlayer.observaciones || '',
+              fecha_seguimiento: loadedPlayer.fecha_seguimiento || '',
+              potencial: loadedPlayer.potencial || 3,
+              estado: loadedPlayer.estado as any || 'Observado',
+              observador: loadedPlayer.observador || '',
             });
 
             const attrs: Record<string, number> = {};
-            player.attributes?.forEach((a: any) => {
+            loadedPlayer.attributes?.forEach((a: any) => {
               attrs[a.atributo] = a.valor;
             });
             setAttributes(attrs);
-            form.setValue('motivos_rechazo', player.motivos_rechazo || '');
+            form.setValue('motivos_rechazo', loadedPlayer.motivos_rechazo || '');
+          } else {
+            toast.error('Jugador no encontrado');
           }
         } catch (error) {
           toast.error('Error al cargar jugador');
@@ -323,24 +355,22 @@ export default function PlayerForm() {
       let playerId = id;
 
       try {
-        if (id) {
-          const { error } = await supabase
-            .from('players')
-            .update(playerPayload)
-            .eq('id', id);
-          if (error) throw error;
-        } else {
-          const { data, error } = await supabase
-            .from('players')
-            .insert(playerPayload)
-            .select()
-            .single();
-          if (error) throw error;
-          playerId = data.id;
-        }
+        const isUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+        const targetDbId = isUuid ? id : (playerId || crypto.randomUUID());
+
+        const payloadToUpsert = {
+          id: targetDbId,
+          ...playerPayload
+        };
+
+        const { error } = await supabase
+          .from('players')
+          .upsert(payloadToUpsert);
+
+        if (error) throw error;
+        playerId = targetDbId;
       } catch (dbError: any) {
         console.warn('Database insert/update error in PlayerForm, using fallback strategy:', dbError);
-        const errorMsg = dbError?.message || '';
         
         // Strip out optional fields that might cause schema or FK issues
         const { 
@@ -356,21 +386,13 @@ export default function PlayerForm() {
         } = playerPayload;
         
         try {
-          if (id) {
-            const { error: retryError } = await supabase
-              .from('players')
-              .update(fallbackPayload)
-              .eq('id', id);
-            if (retryError) throw retryError;
-          } else {
-            const { data: retryData, error: retryError } = await supabase
-              .from('players')
-              .insert(fallbackPayload)
-              .select()
-              .single();
-            if (retryError) throw retryError;
-            playerId = retryData.id;
-          }
+          const isUuid = id && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id);
+          const targetDbId = isUuid ? id : (playerId || crypto.randomUUID());
+          const { error: retryError } = await supabase
+            .from('players')
+            .upsert({ id: targetDbId, ...fallbackPayload });
+          if (retryError) throw retryError;
+          playerId = targetDbId;
         } catch (secondaryError) {
           console.warn('Secondary DB failover failed, saving to local scouting storage:', secondaryError);
           playerId = playerId || id || crypto.randomUUID();
@@ -378,17 +400,27 @@ export default function PlayerForm() {
       }
 
       // Ensure local scouting storage includes this player so it is always present
+      const targetId = id || playerId || crypto.randomUUID();
       const finalPlayerRecord = {
-        id: playerId || id || crypto.randomUUID(),
+        id: targetId,
         ...playerPayload,
         created_at: new Date().toISOString()
       };
       
       const localScoutingSaved = localStorage.getItem('scouting_local_players');
       let localScoutingList: any[] = localScoutingSaved ? JSON.parse(localScoutingSaved) : [];
-      const localIdx = localScoutingList.findIndex((p: any) => p.id === finalPlayerRecord.id || (p.nombre === finalPlayerRecord.nombre && p.apellidos === finalPlayerRecord.apellidos));
+      const normKey = normalizePlayerNameKey(finalPlayerRecord.nombre, finalPlayerRecord.apellidos);
+      const localIdx = localScoutingList.findIndex((p: any) => 
+        (targetId && p.id === targetId) || 
+        (id && p.id === id) || 
+        normalizePlayerNameKey(p.nombre, p.apellidos) === normKey
+      );
       if (localIdx >= 0) {
-        localScoutingList[localIdx] = { ...localScoutingList[localIdx], ...finalPlayerRecord };
+        localScoutingList[localIdx] = { 
+          ...localScoutingList[localIdx], 
+          ...finalPlayerRecord, 
+          id: localScoutingList[localIdx].id || targetId 
+        };
       } else {
         localScoutingList.push(finalPlayerRecord);
       }
@@ -515,7 +547,17 @@ export default function PlayerForm() {
         </div>
       </div>
 
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-8">
+      <form 
+        onSubmit={form.handleSubmit(
+          onSubmit, 
+          (errors) => { 
+            console.warn('Form submission validation error:', errors); 
+            const firstField = Object.keys(errors)[0]; 
+            toast.error(`Revisa los campos obligatorios (${firstField || 'formulario'})`); 
+          }
+        )} 
+        className="space-y-8"
+      >
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           {/* Main Info */}
           <Card className="md:col-span-2 border-none shadow-sm premium-card">
@@ -833,7 +875,9 @@ export default function PlayerForm() {
                     <SelectContent>
                       <SelectItem value="Padre">Padre</SelectItem>
                       <SelectItem value="Madre">Madre</SelectItem>
+                      <SelectItem value="Tutor">Tutor</SelectItem>
                       <SelectItem value="Jugador">Jugador</SelectItem>
+                      <SelectItem value="Otro">Otro</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
