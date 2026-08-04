@@ -17,7 +17,9 @@ import {
   Download,
   Trash2,
   Eye,
-  ExternalLink
+  ExternalLink,
+  Pencil,
+  Save
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -53,6 +55,7 @@ interface SessionFile {
 interface AttendanceSession {
   id: string;
   fecha: string;
+  hora?: string;
   tipo: 'Entrenamiento' | 'Partido' | 'Reunión' | 'Otro';
   descripcion: string;
   records: AttendanceRecord[];
@@ -112,8 +115,18 @@ export default function Asistencia() {
   const [showNewForm, setShowNewForm] = useState(false);
   const [newSessionData, setNewSessionData] = useState({
     fecha: new Date().toISOString().split('T')[0],
+    hora: '19:30 h',
     tipo: 'Entrenamiento' as 'Entrenamiento' | 'Partido' | 'Reunión' | 'Otro',
     descripcion: 'Sesión de entrenamiento habitual'
+  });
+
+  // Edit session modal form state
+  const [editingSession, setEditingSession] = useState<AttendanceSession | null>(null);
+  const [editSessionForm, setEditSessionForm] = useState({
+    fecha: '',
+    hora: '19:30 h',
+    tipo: 'Entrenamiento' as 'Entrenamiento' | 'Partido' | 'Reunión' | 'Otro',
+    descripcion: ''
   });
 
   // Load roster and sessions on team change
@@ -139,12 +152,14 @@ export default function Asistencia() {
           .from('attendance_sessions')
           .select('*')
           .eq('team', selectedTeam)
+          .neq('tipo', 'CalendarioMensual')
           .order('fecha', { ascending: false });
 
         if (!error && data) {
           const formatted: AttendanceSession[] = data.map(item => ({
             id: item.id,
             fecha: item.fecha,
+            hora: item.hora || '19:30 h',
             tipo: item.tipo as any,
             descripcion: item.descripcion || '',
             records: item.records || [],
@@ -187,6 +202,7 @@ export default function Asistencia() {
         const defaultSession: AttendanceSession = {
           id: 'default-session-1',
           fecha: new Date().toISOString().split('T')[0],
+          hora: '19:30 h',
           tipo: 'Entrenamiento',
           descripcion: 'Entrenamiento Táctico de inicio de semana',
           records: defaultRecords
@@ -212,6 +228,7 @@ export default function Asistencia() {
         const payload = {
           team: selectedTeam,
           fecha: sess.fecha,
+          hora: sess.hora || '19:30 h',
           tipo: sess.tipo,
           descripcion: sess.descripcion,
           records: sess.records,
@@ -241,6 +258,80 @@ export default function Asistencia() {
     } catch (err) {
       console.warn('Failed to sync attendance sessions to Supabase:', err);
     }
+  };
+
+  const handleOpenEditSession = (sess: AttendanceSession) => {
+    setEditingSession(sess);
+    setEditSessionForm({
+      fecha: sess.fecha,
+      hora: sess.hora || '19:30 h',
+      tipo: sess.tipo,
+      descripcion: sess.descripcion
+    });
+  };
+
+  const handleSaveEditSession = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingSession) return;
+
+    const updatedSession: AttendanceSession = {
+      ...editingSession,
+      fecha: editSessionForm.fecha,
+      hora: editSessionForm.hora,
+      tipo: editSessionForm.tipo,
+      descripcion: editSessionForm.descripcion
+    };
+
+    const updatedSessions = sessions.map(s => s.id === editingSession.id ? updatedSession : s);
+    setSelectedSession(updatedSession);
+    await saveSessions(updatedSessions);
+
+    // Sync monthly calendar storage as well so calendar view gets updated immediately
+    try {
+      const d = new Date(editSessionForm.fecha);
+      if (!isNaN(d.getTime())) {
+        const year = d.getFullYear();
+        const month = d.getMonth();
+        const calKey = `team_monthly_calendar_${selectedTeam}_${year}_${month}`;
+        const existingCalStr = localStorage.getItem(calKey);
+        let calEvents: Record<string, any> = existingCalStr ? JSON.parse(existingCalStr) : {};
+        
+        if (editingSession.fecha !== editSessionForm.fecha && calEvents[editingSession.fecha]) {
+          delete calEvents[editingSession.fecha];
+        }
+
+        calEvents[editSessionForm.fecha] = {
+          dateStr: editSessionForm.fecha,
+          title: editSessionForm.descripcion,
+          type: editSessionForm.tipo === 'Partido' ? 'Partido' : 'Entrenamiento',
+          hora: editSessionForm.hora || '19:30 h'
+        };
+
+        localStorage.setItem(calKey, JSON.stringify(calEvents));
+
+        const firstOfMonth = `${year}-${String(month + 1).padStart(2, '0')}-01`;
+        await supabase.from('attendance_sessions').upsert({
+          team: selectedTeam,
+          fecha: firstOfMonth,
+          tipo: 'CalendarioMensual',
+          descripcion: JSON.stringify({
+            month,
+            year,
+            team: selectedTeam,
+            events: calEvents,
+            updatedAt: new Date().toISOString()
+          }),
+          records: [],
+          tareas: [],
+          archivos: []
+        });
+      }
+    } catch (err) {
+      console.warn('Could not sync monthly calendar after session edit:', err);
+    }
+
+    setEditingSession(null);
+    toast.success('Sesión actualizada correctamente.');
   };
 
   const handleCreateSession = (e: React.FormEvent) => {
@@ -443,7 +534,7 @@ export default function Asistencia() {
             <span>Planificar nueva sesión</span>
           </h4>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
             <div>
               <label className="text-xs font-semibold text-slate-400">Fecha de la sesión</label>
               <input 
@@ -452,6 +543,17 @@ export default function Asistencia() {
                 value={newSessionData.fecha}
                 onChange={(e) => setNewSessionData({...newSessionData, fecha: e.target.value})}
                 className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+              />
+            </div>
+
+            <div>
+              <label className="text-xs font-semibold text-slate-400">Hora (Opcional)</label>
+              <input 
+                type="text" 
+                value={newSessionData.hora}
+                onChange={(e) => setNewSessionData({...newSessionData, hora: e.target.value})}
+                className="w-full bg-slate-950 border border-slate-850 hover:border-slate-800 rounded-xl p-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all mt-1"
+                placeholder="Ej. 19:30 h"
               />
             </div>
 
@@ -572,16 +674,29 @@ export default function Asistencia() {
                     <h5 className="font-extrabold text-white text-base uppercase tracking-tight">{selectedSession.descripcion}</h5>
                     <span className="text-xs font-bold text-blue-400 bg-blue-500/15 px-2.5 py-0.5 rounded-full border border-blue-500/10 uppercase">{selectedSession.tipo}</span>
                   </div>
-                  <p className="text-[11px] text-slate-400 font-semibold mt-1">PROGRAMADA PARA: {selectedSession.fecha}</p>
+                  <p className="text-[11px] text-slate-400 font-semibold mt-1">
+                    PROGRAMADA PARA: {selectedSession.fecha} {selectedSession.hora ? `• HORA: ${selectedSession.hora}` : ''}
+                  </p>
                 </div>
 
-                <Button 
-                  onClick={() => handleDeleteSession(selectedSession.id)}
-                  variant="ghost"
-                  className="text-xs font-bold text-slate-500 hover:text-red-400 py-1.5 h-auto rounded-xl shrink-0"
-                >
-                  Eliminar Sesión
-                </Button>
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button 
+                    onClick={() => handleOpenEditSession(selectedSession)}
+                    variant="outline"
+                    className="text-xs font-bold text-blue-400 border-blue-500/30 hover:bg-blue-950/50 py-1.5 h-auto rounded-xl gap-1.5 cursor-pointer"
+                  >
+                    <Pencil className="w-3.5 h-3.5 text-blue-400" />
+                    <span>Editar Sesión</span>
+                  </Button>
+
+                  <Button 
+                    onClick={() => handleDeleteSession(selectedSession.id)}
+                    variant="ghost"
+                    className="text-xs font-bold text-slate-500 hover:text-red-400 py-1.5 h-auto rounded-xl"
+                  >
+                    Eliminar Sesión
+                  </Button>
+                </div>
               </div>
 
               {/* Tab Selector */}
@@ -983,6 +1098,107 @@ export default function Asistencia() {
                 Cerrar
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for editing selected session */}
+      {editingSession && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl w-full max-w-md overflow-hidden shadow-2xl">
+            <div className="p-6 border-b border-slate-800 flex items-center justify-between bg-slate-950/60">
+              <div className="flex items-center gap-2">
+                <Pencil className="w-5 h-5 text-blue-400" />
+                <h3 className="font-extrabold text-white text-sm uppercase tracking-wider">
+                  Editar Sesión de Entrenamiento
+                </h3>
+              </div>
+              <button 
+                type="button"
+                onClick={() => setEditingSession(null)}
+                className="text-slate-400 hover:text-white cursor-pointer font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleSaveEditSession} className="p-6 space-y-4">
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Descripción / Título del Entrenamiento *
+                </label>
+                <input 
+                  type="text" 
+                  required
+                  value={editSessionForm.descripcion}
+                  onChange={(e) => setEditSessionForm({ ...editSessionForm, descripcion: e.target.value })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2.5 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-bold"
+                  placeholder="Ej. Sesión de entrenamiento habitual"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Fecha
+                  </label>
+                  <input 
+                    type="date" 
+                    required
+                    value={editSessionForm.fecha}
+                    onChange={(e) => setEditSessionForm({ ...editSessionForm, fecha: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                    Hora
+                  </label>
+                  <input 
+                    type="text" 
+                    value={editSessionForm.hora}
+                    onChange={(e) => setEditSessionForm({ ...editSessionForm, hora: e.target.value })}
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold"
+                    placeholder="Ej. 19:30 h"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Tipo de Actividad
+                </label>
+                <select 
+                  value={editSessionForm.tipo}
+                  onChange={(e) => setEditSessionForm({ ...editSessionForm, tipo: e.target.value as any })}
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-all font-semibold cursor-pointer"
+                >
+                  <option value="Entrenamiento">Entrenamiento</option>
+                  <option value="Partido">Partido</option>
+                  <option value="Reunión">Reunión</option>
+                  <option value="Otro">Otro</option>
+                </select>
+              </div>
+
+              <div className="flex justify-end gap-2 pt-4 border-t border-slate-800">
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => setEditingSession(null)}
+                  className="text-xs font-bold border-slate-800 text-slate-300 rounded-xl cursor-pointer"
+                >
+                  Cancelar
+                </Button>
+                <Button 
+                  type="submit" 
+                  className="text-xs font-extrabold uppercase bg-blue-600 hover:bg-blue-500 text-white rounded-xl gap-2 shadow-lg shadow-blue-600/20 cursor-pointer"
+                >
+                  <Save className="w-4 h-4" />
+                  <span>Guardar Cambios</span>
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}

@@ -598,6 +598,39 @@ export default function Admin() {
         }
       }
 
+      // 10. Sync Monthly Calendars
+      toast.loading('Sincronizando calendarios mensuales...', { id: toastId });
+      for (const team of CLUB_TEAMS) {
+        for (let m = 0; m < 12; m++) {
+          const calKey = `ud_poveda_monthly_events_${team}_2026_${m}`;
+          const calData = localStorage.getItem(calKey);
+          if (calData) {
+            try {
+              const events = JSON.parse(calData);
+              const firstOfMonth = `2026-${String(m + 1).padStart(2, '0')}-01`;
+              const masterPayload = {
+                team,
+                fecha: firstOfMonth,
+                tipo: 'CalendarioMensual',
+                descripcion: JSON.stringify({
+                  month: m,
+                  year: 2026,
+                  team,
+                  events,
+                  updatedAt: new Date().toISOString()
+                }),
+                records: [],
+                tareas: [],
+                archivos: []
+              };
+              await supabase.from('attendance_sessions').upsert(masterPayload);
+            } catch (e) {
+              console.error('Error syncing monthly calendar for team ' + team, e);
+            }
+          }
+        }
+      }
+
       toast.success('¡Sincronización completada con éxito!', { id: toastId });
       toast.success(`Datos cargados a Supabase: ${stats.players} jugadoras, ${stats.matches} partidos, ${stats.sessions} asistencias, ${stats.plans} planes, ${stats.physical} pruebas físicas, ${stats.anthropometrics} controles antropométricos.`);
       loadLocalCounts();

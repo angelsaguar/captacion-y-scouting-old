@@ -327,7 +327,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
         .select('*');
 
       // Combine with local storage sessions
-      const localSessionsStr = localStorage.getItem(`attendance_sessions_${selectedTeam}`);
+      const localSessionsStr = localStorage.getItem(`team_sessions_${selectedTeam}`) || localStorage.getItem(`attendance_sessions_${selectedTeam}`);
       const localSessions = localSessionsStr ? JSON.parse(localSessionsStr) : [];
 
       const allSessionsMap = new Map<string, any>();
@@ -346,11 +346,13 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
           // Keep match if already set
           if (!autoEvents[dateStr] || autoEvents[dateStr].type !== 'Partido') {
             const evType: CalendarEventType = s.tipo === 'Partido' ? 'Partido' : 'Entrenamiento';
+            const existingEvent = autoEvents[dateStr];
             autoEvents[dateStr] = {
               dateStr,
-              title: s.descripcion || (s.tipo === 'Partido' ? 'Partido Programado' : 'Entrenamiento'),
+              title: s.descripcion || existingEvent?.title || (s.tipo === 'Partido' ? 'Partido Programado' : 'Entrenamiento'),
               type: evType,
-              hora: s.hora || '19:30 h'
+              hora: s.hora || existingEvent?.hora || '19:30 h',
+              lugar: s.lugar || existingEvent?.lugar || ''
             };
             sessionsCount++;
           }
@@ -497,21 +499,122 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
   };
 
   // Save event modal
-  const handleSaveEvent = (e: React.FormEvent) => {
+  const handleSaveEvent = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editingDate) return;
 
-    const updated = {
-      ...events,
-      [editingDate]: {
-        ...eventForm,
-        dateStr: editingDate
-      }
+    const eventToSave: CalendarEvent = {
+      ...eventForm,
+      dateStr: editingDate
     };
 
-    saveEvents(updated);
+    const updatedEvents = {
+      ...events,
+      [editingDate]: eventToSave
+    };
+
+    saveEvents(updatedEvents);
+
+    try {
+      if (eventToSave.type === 'Entrenamiento') {
+        // Upsert to Supabase attendance_sessions
+        await supabase
+          .from('attendance_sessions')
+          .upsert({
+            team: selectedTeam,
+            fecha: editingDate,
+            tipo: 'Entrenamiento',
+            descripcion: eventToSave.title || 'Entrenamiento',
+            hora: eventToSave.hora || '19:30 h',
+            records: [],
+            tareas: [],
+            archivos: []
+          });
+
+        // Sync local storage team_sessions_${selectedTeam}
+        const sessionsKey = `team_sessions_${selectedTeam}`;
+        const savedSessionsStr = localStorage.getItem(sessionsKey);
+        let currentSessions: any[] = savedSessionsStr ? JSON.parse(savedSessionsStr) : [];
+        const existingIdx = currentSessions.findIndex((s: any) => s.fecha === editingDate);
+        if (existingIdx >= 0) {
+          currentSessions[existingIdx] = {
+            ...currentSessions[existingIdx],
+            descripcion: eventToSave.title || 'Entrenamiento',
+            hora: eventToSave.hora || '19:30 h',
+            tipo: 'Entrenamiento'
+          };
+        } else {
+          currentSessions.unshift({
+            id: crypto.randomUUID(),
+            fecha: editingDate,
+            hora: eventToSave.hora || '19:30 h',
+            tipo: 'Entrenamiento',
+            descripcion: eventToSave.title || 'Entrenamiento',
+            records: []
+          });
+        }
+        localStorage.setItem(sessionsKey, JSON.stringify(currentSessions));
+      } else if (eventToSave.type === 'Partido') {
+        // Upsert to Supabase team_matches
+        await supabase
+          .from('team_matches')
+          .upsert({
+            team_id: selectedTeam,
+            fecha: editingDate,
+            rival: eventToSave.rival || eventToSave.title.replace(/^vs\s+/i, '').replace(/^@\s+/i, '') || 'Rival',
+            tipo: eventToSave.condicion || (eventToSave.title.toLowerCase().includes('@') ? 'Visitante' : 'Local'),
+            hora: eventToSave.hora || '20:00 h',
+            lugar: eventToSave.lugar || 'Polideportivo La Poveda',
+            estadisticas: {}
+          });
+
+        // Sync local storage team_matches_${selectedTeam}
+        const matchesKey = `team_matches_${selectedTeam}`;
+        const savedMatchesStr = localStorage.getItem(matchesKey);
+        let currentMatches: any[] = savedMatchesStr ? JSON.parse(savedMatchesStr) : [];
+        const existingMatchIdx = currentMatches.findIndex((m: any) => m.fecha === editingDate);
+        const matchPayload = {
+          id: existingMatchIdx >= 0 ? currentMatches[existingMatchIdx].id : crypto.randomUUID(),
+          team_id: selectedTeam,
+          fecha: editingDate,
+          rival: eventToSave.rival || eventToSave.title.replace(/^vs\s+/i, '').replace(/^@\s+/i, '') || 'Rival',
+          tipo: eventToSave.condicion || (eventToSave.title.toLowerCase().includes('@') ? 'Visitante' : 'Local'),
+          hora: eventToSave.hora || '20:00 h',
+          lugar: eventToSave.lugar || 'Polideportivo La Poveda'
+        };
+        if (existingMatchIdx >= 0) {
+          currentMatches[existingMatchIdx] = matchPayload;
+        } else {
+          currentMatches.push(matchPayload);
+        }
+        localStorage.setItem(matchesKey, JSON.stringify(currentMatches));
+      }
+
+      // Upsert master monthly calendar record to attendance_sessions
+      const firstOfMonth = `${currentYear}-${String(currentMonth + 1).padStart(2, '0')}-01`;
+      const masterPayload = {
+        team: selectedTeam,
+        fecha: firstOfMonth,
+        tipo: 'CalendarioMensual',
+        descripcion: JSON.stringify({
+          month: currentMonth,
+          year: currentYear,
+          team: selectedTeam,
+          events: updatedEvents,
+          updatedAt: new Date().toISOString()
+        }),
+        records: [],
+        tareas: [],
+        archivos: []
+      };
+      await supabase.from('attendance_sessions').upsert(masterPayload);
+
+    } catch (err) {
+      console.warn('Error syncing edited event to Supabase:', err);
+    }
+
     setEditingDate(null);
-    toast.success('Evento guardado en el calendario.');
+    toast.success('Evento guardado y sincronizado correctamente.');
   };
 
   // Delete event
