@@ -636,6 +636,9 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
 
   // Helper to generate poster image data URL using html-to-image with html2canvas fallback
   const getCalendarImageDataUrl = async (el: HTMLElement): Promise<string> => {
+    const targetWidth = Math.max(el.scrollWidth, 900);
+    const targetHeight = el.scrollHeight;
+
     // Primary approach: html-to-image (supports Tailwind v4 modern CSS)
     try {
       const dataUrl = await toPng(el, {
@@ -643,6 +646,12 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
         pixelRatio: 2,
         backgroundColor: '#070d1e',
         cacheBust: true,
+        width: targetWidth,
+        height: targetHeight,
+        style: {
+          transform: 'none',
+          maxWidth: 'none',
+        }
       });
       if (dataUrl && dataUrl.length > 200) {
         return dataUrl;
@@ -659,6 +668,10 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
         allowTaint: true,
         backgroundColor: '#070d1e',
         logging: false,
+        width: targetWidth,
+        height: targetHeight,
+        windowWidth: targetWidth,
+        windowHeight: targetHeight,
         onclone: (clonedDoc) => {
           const pulses = clonedDoc.querySelectorAll<HTMLElement>('.animate-pulse');
           pulses.forEach(p => { p.style.animation = 'none'; });
@@ -675,22 +688,13 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
   const handleExportPDF = async () => {
     if (!printRef.current) return;
     setIsExporting(true);
-    const toastId = toast.loading('Generando Calendario en PDF de alta calidad...');
+    const toastId = toast.loading('Generando Calendario en PDF de alta resolución...');
 
     try {
       const element = printRef.current;
       const imgData = await getCalendarImageDataUrl(element);
 
-      const pdf = new jsPDF({
-        orientation: 'landscape',
-        unit: 'mm',
-        format: 'a4'
-      });
-
-      const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-
-      // Create temporary Image to measure dimensions
+      // Create temporary Image to measure natural dimensions & aspect ratio
       const img = new Image();
       await new Promise<void>((resolve, reject) => {
         img.onload = () => resolve();
@@ -699,24 +703,24 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
       });
 
       const imgWidth = img.naturalWidth || 1000;
-      const imgHeight = img.naturalHeight || 600;
+      const imgHeight = img.naturalHeight || 700;
+      const aspect = imgHeight / imgWidth;
 
-      const margin = 5;
-      const targetWidth = pdfWidth - (margin * 2);
-      const targetHeight = pdfHeight - (margin * 2);
+      // Dynamic PDF dimensions matching exact aspect ratio (100% full screen responsive, 0 margin)
+      const pdfWidth = 297; // mm base width
+      const pdfHeight = pdfWidth * aspect;
 
-      const ratio = Math.min(targetWidth / imgWidth, targetHeight / imgHeight);
-      const finalW = imgWidth * ratio;
-      const finalH = imgHeight * ratio;
+      const pdf = new jsPDF({
+        orientation: pdfWidth >= pdfHeight ? 'landscape' : 'portrait',
+        unit: 'mm',
+        format: [pdfWidth, pdfHeight]
+      });
 
-      const x = (pdfWidth - finalW) / 2;
-      const y = (pdfHeight - finalH) / 2;
-
-      pdf.addImage(imgData, 'PNG', x, y, finalW, finalH);
+      pdf.addImage(imgData, 'PNG', 0, 0, pdfWidth, pdfHeight);
       const filename = `Calendario_${selectedTeam.replace(/\s+/g, '_')}_${MONTH_NAMES[currentMonth]}_${currentYear}.pdf`;
       pdf.save(filename);
 
-      toast.success('¡Calendario descargado en PDF con éxito!', { id: toastId });
+      toast.success('¡Calendario PDF descargado a pantalla completa!', { id: toastId });
     } catch (e) {
       console.error('Error al exportar en PDF:', e);
       toast.error('Ocurrió un error al generar el PDF. Puedes intentar descargar como Imagen PNG o compartir por WhatsApp.', { id: toastId });
