@@ -1098,7 +1098,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
                                 </span>
                               )}
                               {event.type === 'Partido' && (
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm ${
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm whitespace-nowrap ${
                                   getMatchCondition(event) === 'Local'
                                     ? 'bg-sky-950/90 text-sky-200 border-sky-400/60'
                                     : 'bg-amber-950/90 text-amber-200 border-amber-400/60'
@@ -1159,31 +1159,31 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
             
             {/* Legend Badges */}
             <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
-              <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 mr-1">LEYENDA DE ACTIVIDAD:</span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 text-[11px] font-extrabold">
-                <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+              <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 mr-1 whitespace-nowrap">LEYENDA DE ACTIVIDAD:</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 text-[11px] font-extrabold whitespace-nowrap shrink-0">
+                <Dumbbell className="w-3.5 h-3.5 text-emerald-400 shrink-0" />
                 <span>Entrenamiento</span>
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 text-amber-300 border border-amber-500/30 text-[11px] font-extrabold">
-                <Moon className="w-3.5 h-3.5 text-amber-400" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 text-amber-300 border border-amber-500/30 text-[11px] font-extrabold whitespace-nowrap shrink-0">
+                <Moon className="w-3.5 h-3.5 text-amber-400 shrink-0" />
                 <span>Descanso</span>
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-950/90 text-sky-200 border border-sky-400/60 text-[11px] font-black uppercase">
-                <Home className="w-3.5 h-3.5 text-sky-300" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-950/90 text-sky-200 border border-sky-400/60 text-[11px] font-black uppercase whitespace-nowrap shrink-0">
+                <Home className="w-3.5 h-3.5 text-sky-300 shrink-0" />
                 <span>⚽ Partido Local</span>
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/90 text-amber-200 border border-amber-400/60 text-[11px] font-black uppercase">
-                <Plane className="w-3.5 h-3.5 text-amber-300" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/90 text-amber-200 border border-amber-400/60 text-[11px] font-black uppercase whitespace-nowrap shrink-0">
+                <Plane className="w-3.5 h-3.5 text-amber-300 shrink-0" />
                 <span>⚽ Partido Visitante</span>
               </span>
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-950/90 text-red-200 border border-red-400/60 text-[11px] font-black uppercase">
-                <Trophy className="w-3.5 h-3.5 text-yellow-300" />
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-950/90 text-red-200 border border-red-400/60 text-[11px] font-black uppercase whitespace-nowrap shrink-0">
+                <Trophy className="w-3.5 h-3.5 text-yellow-300 shrink-0" />
                 <span>Inicio Liga</span>
               </span>
             </div>
 
             {/* Motivation Quote */}
-            <div className="text-xs font-black tracking-widest text-slate-100 flex items-center gap-1.5 uppercase bg-[#0e1d40] px-4 py-2 rounded-full border border-blue-400/30 shadow-lg">
+            <div className="text-xs font-black tracking-widest text-slate-100 flex items-center gap-1.5 uppercase bg-[#0e1d40] px-4 py-2 rounded-full border border-blue-400/30 shadow-lg whitespace-nowrap shrink-0">
               <span>🔵⚪ ¡CONFIANZA, ENTREGA Y VICTORIA! ¡A POR TODAS! ⚽ 🔥</span>
             </div>
           </div>
