@@ -1066,19 +1066,19 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
                       <div 
                         key={cIdx} 
                         onClick={() => handleOpenEdit(cell.dateStr, cell.label)}
-                        className={`min-h-[85px] sm:min-h-[95px] rounded-xl border p-2 flex flex-col justify-between transition-all cursor-pointer relative group ${
+                        className={`min-h-[110px] sm:min-h-[125px] rounded-xl border p-1.5 sm:p-2 flex flex-col justify-between transition-all cursor-pointer relative group min-w-0 overflow-hidden ${
                           !cell.isCurrentMonth 
                             ? 'opacity-30 bg-[#080d1e]/50 border-slate-900' 
                             : 'bg-[#0d1b3a]/90 hover:bg-[#142854] border-[#1e3a70] hover:border-blue-400/50 shadow-md'
                         }`}
                       >
                         {/* Day Header Pill inside Cell */}
-                        <div className="flex items-center justify-between">
-                          <span className="text-[10px] sm:text-xs font-black px-2 py-0.5 rounded-md bg-[#16274e] text-slate-200 border border-blue-500/20 shadow-sm">
+                        <div className="flex items-center justify-between gap-1 w-full min-w-0 overflow-hidden">
+                          <span className="text-[10px] sm:text-xs font-black px-1.5 py-0.5 rounded-md bg-[#16274e] text-slate-200 border border-blue-500/20 shadow-sm shrink-0 whitespace-nowrap">
                             {cell.label}
                           </span>
                           {event?.hora && (
-                            <span className="text-[9px] font-extrabold text-blue-300 flex items-center gap-0.5">
+                            <span className="text-[8.5px] font-extrabold text-blue-300 flex items-center gap-0.5 shrink-0 whitespace-nowrap">
                               ⏰ {event.hora}
                             </span>
                           )}
@@ -1086,23 +1086,21 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
 
                         {/* Event Content Badge inside Cell */}
                         {event?.title ? (
-                          <div className={`mt-1 flex-1 flex flex-col justify-between items-center text-center p-1.5 rounded-lg text-xs transition-all ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.shadow}`}>
-                            {/* Icon pill according to event type */}
-                            <div className="flex items-center justify-center gap-1 mb-0.5">
+                          <div className={`mt-1 flex-1 flex flex-col justify-start items-center text-center p-1.5 rounded-lg text-xs transition-all w-full min-w-0 overflow-hidden ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.shadow}`}>
+                            {/* Icon at top of box according to event type */}
+                            <div className="flex items-center justify-center gap-1 mb-1 w-full shrink-0">
                               {event.type === 'Entrenamiento' && (
-                                <span className="inline-flex items-center gap-1 bg-emerald-950/80 px-1.5 py-0.5 rounded text-[9px] font-black text-emerald-300 border border-emerald-500/40">
-                                  <Dumbbell className="w-3 h-3 text-emerald-300 shrink-0" />
-                                  <span>ENTRENAMIENTO</span>
-                                </span>
+                                <div className="p-1 rounded-full bg-emerald-900/40 border border-emerald-500/30">
+                                  <Dumbbell className="w-5 h-5 text-emerald-300 stroke-[2.2]" />
+                                </div>
                               )}
                               {event.type === 'Descanso' && (
-                                <span className="inline-flex items-center gap-1 bg-amber-950/80 px-1.5 py-0.5 rounded text-[9px] font-black text-amber-300 border border-amber-500/40">
-                                  <Moon className="w-3 h-3 text-amber-300 shrink-0" />
-                                  <span>DESCANSO</span>
-                                </span>
+                                <div className="p-1 rounded-full bg-amber-900/40 border border-amber-500/30">
+                                  <Moon className="w-5 h-5 text-amber-300 stroke-[2.2]" />
+                                </div>
                               )}
                               {event.type === 'Partido' && (
-                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm whitespace-nowrap ${
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm ${
                                   getMatchCondition(event) === 'Local'
                                     ? 'bg-sky-950/90 text-sky-200 border-sky-400/60'
                                     : 'bg-amber-950/90 text-amber-200 border-amber-400/60'
@@ -1110,34 +1108,32 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
                                   {getMatchCondition(event) === 'Local' ? (
                                     <>
                                       <Home className="w-3 h-3 text-sky-300 shrink-0" />
-                                      <span>⚽ LOCAL</span>
+                                      <span>LOCAL</span>
                                     </>
                                   ) : (
                                     <>
                                       <Plane className="w-3 h-3 text-amber-300 shrink-0" />
-                                      <span>⚽ VISITANTE</span>
+                                      <span>VISITANTE</span>
                                     </>
                                   )}
                                 </span>
                               )}
                               {event.type === 'Inicio Liga' && (
-                                <span className="inline-flex items-center gap-1 bg-red-950/90 px-1.5 py-0.5 rounded text-[9px] font-black text-red-200 border border-red-400/60">
-                                  <Trophy className="w-3 h-3 text-yellow-300 shrink-0" />
-                                  <span>INICIO LIGA</span>
-                                </span>
+                                <div className="p-1 rounded-full bg-red-900/40 border border-red-500/30">
+                                  <Trophy className="w-5 h-5 text-yellow-300 stroke-[2.2]" />
+                                </div>
                               )}
                               {event.type === 'Torneo' && (
-                                <span className="inline-flex items-center gap-1 bg-purple-950/90 px-1.5 py-0.5 rounded text-[9px] font-black text-purple-200 border border-purple-400/60">
-                                  <Award className="w-3 h-3 text-purple-300 shrink-0" />
-                                  <span>TORNEO</span>
-                                </span>
+                                <div className="p-1 rounded-full bg-purple-900/40 border border-purple-500/30">
+                                  <Award className="w-5 h-5 text-purple-300 stroke-[2.2]" />
+                                </div>
                               )}
                             </div>
 
-                            <span className="line-clamp-2 leading-snug font-black">{event.title}</span>
+                            <span className="leading-snug font-black text-[11px] sm:text-xs w-full break-words my-auto px-0.5">{event.title}</span>
 
                             {event.type === 'Partido' && event.lugar && (
-                              <span className="text-[8px] font-bold text-blue-200 block mt-0.5 opacity-90 truncate max-w-full">
+                              <span className="text-[8.5px] font-bold text-blue-200 block mt-1 opacity-90 break-words w-full">
                                 📍 {event.lugar}
                               </span>
                             )}
