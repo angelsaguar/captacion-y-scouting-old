@@ -26,7 +26,13 @@ import {
   Send,
   MessageSquare,
   ExternalLink,
-  CloudUpload
+  CloudUpload,
+  Dumbbell,
+  Home,
+  Plane,
+  Moon,
+  Award,
+  Activity
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
@@ -42,12 +48,25 @@ export interface CalendarEvent {
   dateStr: string; // YYYY-MM-DD
   title: string;
   type: CalendarEventType;
+  condicion?: 'Local' | 'Visitante';
   hora?: string;
   lugar?: string;
   rival?: string;
   notas?: string;
   colorBg?: string;
   colorText?: string;
+}
+
+export function getMatchCondition(ev?: CalendarEvent): 'Local' | 'Visitante' {
+  if (ev?.condicion) return ev.condicion;
+  const combined = `${ev?.title || ''} ${ev?.lugar || ''}`.toLowerCase();
+  if (combined.includes('visitante') || combined.includes('fuera') || combined.includes('@') || combined.includes('campo rival')) {
+    return 'Visitante';
+  }
+  if (combined.includes('poveda') || combined.includes('local') || combined.includes('casa') || combined.includes('polideportivo')) {
+    return 'Local';
+  }
+  return 'Local';
 }
 
 interface TeamMonthlyCalendarProps {
@@ -109,7 +128,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
           '2026-08-26': { dateStr: '2026-08-26', title: 'Descanso', type: 'Descanso' },
           '2026-08-27': { dateStr: '2026-08-27', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
           '2026-08-28': { dateStr: '2026-08-28', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
-          '2026-08-29': { dateStr: '2026-08-29', title: 'vs AD PARLA', type: 'Partido', rival: 'AD PARLA', hora: '20:00 h', lugar: 'Polideportivo La Poveda' },
+          '2026-08-29': { dateStr: '2026-08-29', title: 'vs AD PARLA', type: 'Partido', condicion: 'Local', rival: 'AD PARLA', hora: '20:00 h', lugar: 'Polideportivo La Poveda' },
           '2026-08-30': { dateStr: '2026-08-30', title: 'Descanso', type: 'Descanso' },
 
           '2026-08-31': { dateStr: '2026-08-31', title: 'Descanso', type: 'Descanso' },
@@ -117,7 +136,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
           '2026-09-02': { dateStr: '2026-09-02', title: 'Descanso', type: 'Descanso' },
           '2026-09-03': { dateStr: '2026-09-03', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
           '2026-09-04': { dateStr: '2026-09-04', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
-          '2026-09-05': { dateStr: '2026-09-05', title: 'Por confirmar', type: 'Partido' },
+          '2026-09-05': { dateStr: '2026-09-05', title: 'Por confirmar', type: 'Partido', condicion: 'Visitante' },
           '2026-09-06': { dateStr: '2026-09-06', title: 'Descanso', type: 'Descanso' },
 
           '2026-09-07': { dateStr: '2026-09-07', title: 'Descanso', type: 'Descanso' },
@@ -125,7 +144,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
           '2026-09-09': { dateStr: '2026-09-09', title: 'Descanso', type: 'Descanso' },
           '2026-09-10': { dateStr: '2026-09-10', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
           '2026-09-11': { dateStr: '2026-09-11', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
-          '2026-09-12': { dateStr: '2026-09-12', title: 'vs SPORTING HORTALEZA', type: 'Partido', rival: 'SPORTING HORTALEZA' },
+          '2026-09-12': { dateStr: '2026-09-12', title: 'vs SPORTING HORTALEZA', type: 'Partido', condicion: 'Visitante', rival: 'SPORTING HORTALEZA', hora: '18:00 h', lugar: 'Campo Hortaleza' },
           '2026-09-13': { dateStr: '2026-09-13', title: 'Descanso', type: 'Descanso' },
 
           '2026-09-14': { dateStr: '2026-09-14', title: 'Descanso', type: 'Descanso' },
@@ -133,7 +152,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
           '2026-09-16': { dateStr: '2026-09-16', title: 'Descanso', type: 'Descanso' },
           '2026-09-17': { dateStr: '2026-09-17', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
           '2026-09-18': { dateStr: '2026-09-18', title: 'Entrenamiento', type: 'Entrenamiento', hora: '19:30 h' },
-          '2026-09-19': { dateStr: '2026-09-19', title: 'vs CD INTER PROMESAS', type: 'Partido', rival: 'CD INTER PROMESAS' },
+          '2026-09-19': { dateStr: '2026-09-19', title: 'vs CD INTER PROMESAS', type: 'Partido', condicion: 'Local', rival: 'CD INTER PROMESAS', hora: '20:00 h', lugar: 'Polideportivo La Poveda' },
           '2026-09-20': { dateStr: '2026-09-20', title: 'Descanso', type: 'Descanso' },
 
           '2026-09-21': { dateStr: '2026-09-21', title: 'Descanso', type: 'Descanso' },
@@ -293,6 +312,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
             dateStr,
             title: m.tipo === 'Local' ? `vs ${m.rival}` : `@ ${m.rival}`,
             type: 'Partido',
+            condicion: m.tipo === 'Local' ? 'Local' : 'Visitante',
             hora: m.hora || '20:00 h',
             lugar: m.lugar || (m.tipo === 'Local' ? 'Polideportivo La Poveda' : 'Campo Visitante'),
             rival: m.rival
@@ -648,11 +668,13 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
       const formattedDate = `${dayName} ${dayNum}`;
 
       if (ev.type === 'Partido') {
-        matchesList.push(`⚽ *${formattedDate}:* ${ev.title}${ev.hora ? ` a las ${ev.hora}` : ''}${ev.lugar ? ` (${ev.lugar})` : ''}`);
+        const cond = getMatchCondition(ev);
+        const iconTag = cond === 'Local' ? '🏠 LOCAL' : '✈️ VISITANTE';
+        matchesList.push(`⚽ ${iconTag} *${formattedDate}:* ${ev.title}${ev.hora ? ` a las ${ev.hora}` : ''}${ev.lugar ? ` (${ev.lugar})` : ''}`);
       } else if (ev.type === 'Inicio Liga' || ev.type === 'Torneo') {
         keyEventsList.push(`🏆 *${formattedDate}:* ${ev.title.toUpperCase()}`);
       } else if (ev.type === 'Entrenamiento') {
-        trainingList.push(`🏃 *${formattedDate}:* ${ev.hora || '19:30 h'}`);
+        trainingList.push(`🏋️ *${formattedDate}:* ${ev.title}${ev.hora ? ` (${ev.hora})` : ''}`);
       }
     });
 
@@ -667,7 +689,7 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
     }
 
     if (trainingList.length > 0) {
-      text += `🏃 *ENTRENAMIENTOS:*\n${trainingList.join('\n')}\n\n`;
+      text += `🏋️ *ENTRENAMIENTOS:*\n${trainingList.join('\n')}\n\n`;
     }
 
     text += `------------------------------------\n`;
@@ -708,13 +730,20 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
           border: 'border-emerald-500/40',
           shadow: 'shadow-sm'
         };
-      case 'Partido':
-        return {
-          bg: 'bg-gradient-to-r from-blue-600 via-blue-700 to-indigo-800 border border-blue-400/50',
+      case 'Partido': {
+        const isLocal = getMatchCondition(ev) === 'Local';
+        return isLocal ? {
+          bg: 'bg-gradient-to-r from-sky-700 via-blue-800 to-indigo-900 border border-sky-400/60',
           text: 'text-white font-black uppercase tracking-wider',
-          border: 'border-blue-400/50',
-          shadow: 'shadow-lg shadow-blue-600/30'
+          border: 'border-sky-400/60',
+          shadow: 'shadow-lg shadow-sky-600/30'
+        } : {
+          bg: 'bg-gradient-to-r from-amber-700 via-orange-800 to-amber-900 border border-amber-400/60',
+          text: 'text-white font-black uppercase tracking-wider',
+          border: 'border-amber-400/60',
+          shadow: 'shadow-lg shadow-amber-600/30'
         };
+      }
       case 'Inicio Liga':
         return {
           bg: 'bg-gradient-to-r from-red-600 to-rose-600 border border-red-400',
@@ -949,14 +978,66 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
                         </div>
 
                         {/* Event Content Badge inside Cell */}
-                        <div className={`mt-1.5 flex-1 flex flex-col justify-center items-center text-center p-1.5 rounded-lg text-xs transition-all ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.shadow}`}>
-                          <span className="line-clamp-2 leading-snug">{event?.title || ''}</span>
-                          {event?.type === 'Partido' && event?.lugar && (
-                            <span className="text-[8px] font-bold text-blue-200 block mt-0.5 opacity-90 truncate max-w-full">
-                              📍 {event.lugar}
-                            </span>
-                          )}
-                        </div>
+                        {event?.title ? (
+                          <div className={`mt-1 flex-1 flex flex-col justify-between items-center text-center p-1.5 rounded-lg text-xs transition-all ${badgeStyle.bg} ${badgeStyle.text} ${badgeStyle.shadow}`}>
+                            {/* Icon pill according to event type */}
+                            <div className="flex items-center justify-center gap-1 mb-0.5">
+                              {event.type === 'Entrenamiento' && (
+                                <span className="inline-flex items-center gap-1 bg-emerald-950/80 px-1.5 py-0.5 rounded text-[9px] font-black text-emerald-300 border border-emerald-500/40">
+                                  <Dumbbell className="w-3 h-3 text-emerald-300 shrink-0" />
+                                  <span>ENTRENAMIENTO</span>
+                                </span>
+                              )}
+                              {event.type === 'Descanso' && (
+                                <span className="inline-flex items-center gap-1 bg-amber-950/80 px-1.5 py-0.5 rounded text-[9px] font-black text-amber-300 border border-amber-500/40">
+                                  <Moon className="w-3 h-3 text-amber-300 shrink-0" />
+                                  <span>DESCANSO</span>
+                                </span>
+                              )}
+                              {event.type === 'Partido' && (
+                                <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-black uppercase tracking-wider border shadow-sm ${
+                                  getMatchCondition(event) === 'Local'
+                                    ? 'bg-sky-950/90 text-sky-200 border-sky-400/60'
+                                    : 'bg-amber-950/90 text-amber-200 border-amber-400/60'
+                                }`}>
+                                  {getMatchCondition(event) === 'Local' ? (
+                                    <>
+                                      <Home className="w-3 h-3 text-sky-300 shrink-0" />
+                                      <span>⚽ LOCAL</span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <Plane className="w-3 h-3 text-amber-300 shrink-0" />
+                                      <span>⚽ VISITANTE</span>
+                                    </>
+                                  )}
+                                </span>
+                              )}
+                              {event.type === 'Inicio Liga' && (
+                                <span className="inline-flex items-center gap-1 bg-red-950/90 px-1.5 py-0.5 rounded text-[9px] font-black text-red-200 border border-red-400/60">
+                                  <Trophy className="w-3 h-3 text-yellow-300 shrink-0" />
+                                  <span>INICIO LIGA</span>
+                                </span>
+                              )}
+                              {event.type === 'Torneo' && (
+                                <span className="inline-flex items-center gap-1 bg-purple-950/90 px-1.5 py-0.5 rounded text-[9px] font-black text-purple-200 border border-purple-400/60">
+                                  <Award className="w-3 h-3 text-purple-300 shrink-0" />
+                                  <span>TORNEO</span>
+                                </span>
+                              )}
+                            </div>
+
+                            <span className="line-clamp-2 leading-snug font-black">{event.title}</span>
+
+                            {event.type === 'Partido' && event.lugar && (
+                              <span className="text-[8px] font-bold text-blue-200 block mt-0.5 opacity-90 truncate max-w-full">
+                                📍 {event.lugar}
+                              </span>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="mt-1.5 flex-1" />
+                        )}
 
                         {/* Quick Edit Icon on Hover */}
                         <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity bg-blue-600 text-white p-1 rounded-md shadow">
@@ -975,18 +1056,26 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
             
             {/* Legend Badges */}
             <div className="flex flex-wrap items-center justify-center gap-2 text-xs font-bold">
-              <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 mr-1">LEYENDA:</span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 text-[11px] font-bold">
-                🏃 Entrenamiento
+              <span className="text-[10px] font-black uppercase tracking-wider text-blue-400 mr-1">LEYENDA DE ACTIVIDAD:</span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-950/90 text-emerald-300 border border-emerald-500/40 text-[11px] font-extrabold">
+                <Dumbbell className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Entrenamiento</span>
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-amber-950/80 text-amber-300 border border-amber-500/30 text-[11px] font-bold">
-                😴 Descanso
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/80 text-amber-300 border border-amber-500/30 text-[11px] font-extrabold">
+                <Moon className="w-3.5 h-3.5 text-amber-400" />
+                <span>Descanso</span>
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-blue-600 text-white border border-blue-400 text-[11px] font-black uppercase">
-                ⚽ Partido
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-sky-950/90 text-sky-200 border border-sky-400/60 text-[11px] font-black uppercase">
+                <Home className="w-3.5 h-3.5 text-sky-300" />
+                <span>⚽ Partido Local</span>
               </span>
-              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-red-600 text-white border border-red-400 text-[11px] font-black uppercase">
-                🏆 Inicio Liga
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-amber-950/90 text-amber-200 border border-amber-400/60 text-[11px] font-black uppercase">
+                <Plane className="w-3.5 h-3.5 text-amber-300" />
+                <span>⚽ Partido Visitante</span>
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-red-950/90 text-red-200 border border-red-400/60 text-[11px] font-black uppercase">
+                <Trophy className="w-3.5 h-3.5 text-yellow-300" />
+                <span>Inicio Liga</span>
               </span>
             </div>
 
@@ -1201,17 +1290,60 @@ export default function TeamMonthlyCalendar({ selectedTeam }: TeamMonthlyCalenda
               </div>
 
               {eventForm.type === 'Partido' && (
-                <div>
-                  <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
-                    Nombre del Rival / Equipo
-                  </label>
-                  <input 
-                    type="text"
-                    value={eventForm.rival || ''}
-                    onChange={(e) => setEventForm({ ...eventForm, rival: e.target.value, title: `vs ${e.target.value}` })}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-all"
-                    placeholder="Ej. AD PARLA"
-                  />
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Condición del Partido (Icono)
+                    </label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setEventForm({ 
+                          ...eventForm, 
+                          condicion: 'Local',
+                          lugar: eventForm.lugar || 'Polideportivo La Poveda'
+                        })}
+                        className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-black rounded-xl border transition-all cursor-pointer ${
+                          getMatchCondition(eventForm) === 'Local'
+                            ? 'bg-sky-600 text-white border-sky-400 shadow-lg shadow-sky-600/30'
+                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Home className="w-4 h-4 text-sky-200" />
+                        <span>🏠 LOCAL (CASA)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setEventForm({ 
+                          ...eventForm, 
+                          condicion: 'Visitante',
+                          lugar: eventForm.lugar === 'Polideportivo La Poveda' ? '' : eventForm.lugar
+                        })}
+                        className={`flex items-center justify-center gap-2 px-3 py-2 text-xs font-black rounded-xl border transition-all cursor-pointer ${
+                          getMatchCondition(eventForm) === 'Visitante'
+                            ? 'bg-amber-600 text-white border-amber-400 shadow-lg shadow-amber-600/30'
+                            : 'bg-slate-950 text-slate-400 border-slate-800 hover:bg-slate-800'
+                        }`}
+                      >
+                        <Plane className="w-4 h-4 text-amber-200" />
+                        <span>✈️ VISITANTE (FUERA)</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                      Nombre del Rival / Equipo
+                    </label>
+                    <input 
+                      type="text"
+                      value={eventForm.rival || ''}
+                      onChange={(e) => setEventForm({ ...eventForm, rival: e.target.value, title: `vs ${e.target.value}` })}
+                      className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3.5 py-2 text-xs text-white focus:outline-none focus:border-blue-500 transition-all"
+                      placeholder="Ej. AD PARLA"
+                    />
+                  </div>
                 </div>
               )}
 
